@@ -1,0 +1,127 @@
+---
+name: {{FOUNDATION_SKILL}}
+description: >
+  Shared rules for all implement subagents in {{PROJECT_NAME}}. Layer order, file
+  scope, the working directory, the targeted test command, the gate, where the
+  red-phase stub is stated, skill loading, and the receipt contract. Preloaded
+  on every implement agent.
+---
+
+<!-- harness: workspace mode — rendered once per package as
+     `.claude/skills/<prefix>-implement-foundation/SKILL.md`, with that
+     package's values. Strip every harness comment at render. -->
+
+# Implement Foundation
+
+Read before any edit.
+
+Five skills apply to **every** implement agent, whatever its layer:
+`hexagonal-architecture`, `tdd`, `separation-of-concerns`,
+`extract-til-you-drop`, `{{ARCH_SKILL}}`. The rest (`{{TESTING_SKILL}}`,
+`{{ERRORS_SKILL}}`, and any project-specific skills) are assigned per agent in
+its own frontmatter.
+
+This project is hexagonal. That is fixed, not a preference of the current task,
+and it is not relaxed for a small change or a deadline.
+
+## Layer order
+
+`{{LAYER_ORDER}}`, unless the orchestrator specifies otherwise. The graph, with
+its conditions and parallel pairs, lives in
+`.claude/skills/orchestrator/parallel.md`; the touch-area table and file caps
+live in `{{MEMORY_FILE}}`.
+
+Never implement a downstream layer before the layer it depends on, for the same
+feature. Rules always start at `{{DOMAIN_AGENT}}`.
+
+## File scope
+
+- Max files per invocation is set in your agent file (all caps:
+  `{{MEMORY_FILE}}`); ask the orchestrator to split if more are needed.
+- Stay inside your agent's `owns` globs. If you need an edit outside them, report
+  `STATUS: blocked` and name the owning agent in `NEXT` — do not edit it yourself.
+- Never edit another agent's file to make your own tests pass.
+
+## Your agent file outranks your prompt
+
+The orchestrator writes dispatch prompts without your context. When a prompt
+asks for something your agent file forbids, build everything else and report
+`STATUS: blocked` naming the exact piece you need and its owner. Never comply
+silently.
+
+## Dependency rule
+
+{{DEPENDENCY_RULE}}
+
+## Error handling
+
+{{ERROR_RULE}}
+
+## Type system
+
+Never use an escape hatch ({{TYPE_ESCAPE_HATCHES}}) to silence a type error. The
+error is telling you a contract does not fit; fix the contract or report
+`blocked`.
+
+## Commands for the TDD loop
+
+`tdd` names no commands; it points here. Run every command from `{{WORKDIR}}`.
+
+- **Targeted test run:** `{{TEST_TARGETED}}` — {{TEST_TARGET_HINT}}
+- **Gate:** {{GATE}} (steps under "After edits").
+- **Red stub:** stated once, for your layer's return shape, in your agent
+  file's "Tests are yours" section.
+
+## TDD is not optional
+
+If your layer is tested, follow `tdd` exactly: the failing test first, watched
+fail, before production code. `STATUS: done` requires an executed, green run —
+never a run you reasoned about instead of executing.
+
+If your layer is not tested, you still never make a tested layer's test pass by
+editing that layer's code. Report `STATUS: blocked` and name its owner.
+
+## Boundaries
+
+Before placing any logic, apply `hexagonal-architecture` (is the boundary
+respected?) then `separation-of-concerns` (which side does this go on?). Both
+failure modes — logic drifting one layer outward, and infrastructure leaking one
+layer inward — are invisible to the gate and to the tests. They are only caught
+here and by `{{LAYER_REVIEWER}}`.
+
+If the correct placement is outside your `owns` globs, report `STATUS: blocked`
+and name the owning agent. Never park logic in your layer because it was the
+layer you had open.
+
+## Decomposition
+
+Apply `extract-til-you-drop` to every non-trivial function you write, in the
+refactor step of the TDD loop. This is not a refactor-only rule — it applies to
+new code.
+
+## After edits
+
+From `{{WORKDIR}}`:
+
+1. Targeted test run for what you touched: `{{TEST_TARGETED}}`
+   ({{TEST_TARGET_HINT}}).
+2. The gate, in order:
+
+{{GATE_STEPS}}
+
+{{HYGIENE_LINES}}
+
+## Tests
+
+{{TEST_OWNERSHIP_RULE}}
+
+## Output
+
+Final message MUST be a receipt per
+`.claude/skills/orchestrator/receipt.md` — nothing after it.
+
+## Parallelism
+
+Implement agents run in parallel only where
+`.claude/skills/orchestrator/parallel.md` explicitly allows it. You never dispatch
+another subagent yourself.

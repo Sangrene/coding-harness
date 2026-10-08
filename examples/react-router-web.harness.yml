@@ -1,0 +1,359 @@
+# Modelled on a real React Router codebase — a web-app instance, and the
+# `partial` example of the set. It shows what the manifest looks like after a
+# migration has mostly landed: the gaps left are narrow and real, and the rules
+# are not softened to fit them.
+#
+# History worth knowing before copying this file. The first version of this
+# example recorded four structural gaps (port derived from adapter via
+# `ReturnType<typeof createXRepository>`, wire schema as domain type in
+# `<domain>.model.ts`, anemic domain, store interface owned by the MobX file).
+# The repo's migration doc closed all of them: no
+# `<domain>.repository.ts` or `<domain>.model.ts` remains, and every
+# detection command prints nothing. The repo's own CLAUDE.md touch-area table,
+# clean-architecture "Known deviations" and typecheck-guard still name those
+# legacy files — a regenerated harness drops them.
+harness_version: 2
+
+project:
+  name: acme-web
+  kind: web-app
+  stack: typescript
+  language: "TypeScript 5"
+  frameworks: ["React Router 7", "React 19", "MobX", "ArkType", "neverthrow", "react-hook-form", "Vitest", "Storybook"]
+  summary: React Router app, hexagonal domains with MobX state adapters, ArkType DTOs, neverthrow results.
+
+commands:
+  run: bun run
+  exec: bunx
+  add_dependency: bun add
+  gate:
+    - "bun run typecheck"        # react-router typegen && tsc --noEmit
+  gate_name: typecheck-guard
+  test_targeted: "bun run test {path}"
+  test_target_hint: "{path} = the colocated test file(s), e.g. src/note/domain/note.test.ts or app/createNote/createNote.view-model.test.tsx"
+  test_all: "bun run test"
+  lint: ""
+  arch_test: ""
+  hygiene:
+    - "Always bun run. Never npx, npm, yarn, or bun vitest directly."
+    - "Never append 2>&1 — it swallows output and makes debugging impossible."
+    - "Test runs can exceed a minute — always wait for exit."
+
+dev_run:
+  command: "bun run dev"
+  fakes_flag: "VITE_IN_MEMORY_REPOSITORIES=true"
+  notes:
+    - "Offline mode is served by src/<domain>/adapters/inMemory*.ts, never by tests/ fakes."
+
+architecture:
+  shape: full
+  dependency_rule: "domain/ depends on nothing; features/ depend on domain/ and ports/; adapters and stores implement ports; app/ calls features; only app.provider.tsx knows concrete adapters."
+  hexagon:
+    domain_type:      { name: "<Entity> type + pure rule functions", path: "src/<domain>/domain/<entity>.ts" }
+    domain_error:     { name: "<Domain>Error union (kind)",         path: "src/<domain>/domain/<domain>.errors.ts" }
+    driving_port:     { name: feature core,                          path: "src/<domain>/features/<feature>/<feature>.core.ts" }
+    driving_adapter:  { name: component,                             path: "app/**/*.tsx" }
+    driven_port:      { name: "<Capability> interface",              path: "src/<domain>/ports/<capability>.port.ts, src/shared/<capability>/<capability>.port.ts" }
+    driven_adapter:   { name: "create<Technology><Capability>",     path: "src/<domain>/adapters/** (DTO + mappers in <domain>.dto.ts)" }
+    test_double:      { name: "createFake<Capability>",             path: "src/<domain>/tests/<capability>.fake.ts" }
+    composition_root: { name: AppProvider + app.core,               path: "src/shared/app/app.provider.tsx, src/shared/app/app.core.ts" }
+  exemplar_slice: "src/note/"
+  leakage_examples: ["ArkType DTOs / responseType", "ApiError", "backend casing (first_name)", "wire enums (PROCESSING_PENDING)", "File / Blob / FormData in a port", "ObservableMap in a state port"]
+
+  errors:
+    type: "ResultAsync<T, <Domain>Error> (neverthrow)"
+    never_throw: true
+    discriminate_by: "kind field"
+    classification:
+      - { source: "ApiError.errorCode (NOTE_NOT_FOUND, …)", becomes: "<Domain>Error kind (notFound, …)", where: "src/<domain>/adapters/<domain>.dto.ts (to<Domain>Error)" }
+      - { source: "network failure / 401", becomes: "network / unauthenticated", where: "src/<domain>/adapters/<domain>.dto.ts" }
+      - { source: "rule refused (status not editable, cap reached)", becomes: "domain kind (notEditable, …)", where: "src/<domain>/domain/<entity>.ts" }
+    traps:
+      - "`.map(() => ok())` nests a Result"
+      - "`.match(() => undefined, () => undefined)` swallows both branches"
+      - "comparing `error.message` instead of switching on `error.kind`"
+
+  validation:
+    library: ArkType
+    placement: "response DTOs validate in adapters/ (responseType); cores export ArkType input schemas the view-model passes to arktypeResolver; domain/ never imports ArkType"
+
+  type_escape_hatches: ["as (outside branded-id constructors like toNoteId)", "any", "!", "@ts-expect-error"]
+  modules: { enabled: false }
+
+conformance:
+  level: partial
+  migration_doc: "docs/migration.md"
+  gaps:
+    - role_or_rule: unplaced files
+      finding: >
+        Three files sit at the domain root with no hexagon role:
+        exportEncoding.ts (imports a third-party PDF encoder, an adapter concern
+        outside adapters/), export.constants.ts (adapter config — mime, page
+        size, chunk size) and formatExportLabel.ts (display formatting imported
+        by view-models from src/). No layer owns them.
+      paths: ["src/export/exportEncoding.ts", "src/export/export.constants.ts", "src/export/formatExportLabel.ts"]
+      disposition: migrate
+      layers: [repository-builder, view-model-builder]
+    - role_or_rule: domain_error
+      finding: >
+        AccessTokenProvider and HTTPClient return ResultAsync<T, Error>. The
+        untyped error is mapped by every to<Domain>Error, so it never reaches a
+        core — but the port contract itself is unclassified.
+      paths: ["src/shared/httpClient/accessTokenProvider.port.ts", "src/shared/httpClient/*.ts"]
+      disposition: migrate
+      layers: [repository-builder]
+    - role_or_rule: test placement
+      finding: >
+        src/export/tests/ holds the core test and adapter/encoder tests
+        (export.core.test.ts, pdfExporter.test.ts, …) instead of
+        colocating them, so they fall under repository-builder's tests/ glob.
+      paths: ["src/export/tests/*.test.ts"]
+      disposition: migrate
+      layers: [repository-builder, use-case-builder]
+
+layers:
+  - agent: domain-builder
+    kind: domain
+    role: domain types, pure rule functions, <Domain>Error
+    owns: ["src/<domain>/domain/**"]
+    forbidden:
+      - { path: "src/<domain>/ports/**", owner: repository-builder }
+      - { path: "src/<domain>/features/**", owner: use-case-builder }
+    rules:
+      - "Imports nothing external except neverthrow — no ArkType, MobX, React, uuid, httpClient, browser APIs."
+      - "Project vocabulary, never the backend's: createdAt: Date, status: \"processing\"."
+      - "One named, exported pure function per rule; time and ids come in as parameters."
+      - "Branded ids for identity."
+    reference: "src/note/domain/note.ts"
+    owns_tests: true
+    max_files: 3
+    depends_on: []
+    parallel_with: []
+    optional: false
+    skills: [error-handling]
+
+  - agent: repository-builder
+    kind: driven-adapter
+    role: driven ports, DTO + mappers, HTTP / in-memory / browser adapters, fakes, shared capability ports
+    owns:
+      - "src/<domain>/ports/*.port.ts"
+      - "src/<domain>/adapters/**"
+      - "src/<domain>/tests/**"
+      - "src/shared/*/**"
+    excludes:
+      - "src/<domain>/ports/<domain>State.port.ts"
+      - "src/shared/app/**"
+      - "src/shared/*/*.core.ts"
+      - "src/shared/*/*.core.test.ts"
+      - "src/shared/*/*.store.ts"
+    rules:
+      - "Port first, in domain types, alone in its file. Adapter annotated `: <Capability>`; never `ReturnType<typeof create…>`."
+      - "DTOs never leave adapters/; to<Entity> / to<Entity>Dto / to<Domain>Error are pure and TDD'd."
+      - "Every HTTP adapter has an inMemory* twin for VITE_IN_MEMORY_REPOSITORIES."
+      - "An adapter never depends on a core; it declares a small port instead."
+    reference: "src/note/adapters/httpNoteRepository.ts"
+    owns_tests: true     # mapper tests; I/O plumbing is not unit-tested
+    max_files: 3
+    depends_on: [domain-builder]
+    parallel_with: [store-builder]
+    optional: false
+    skills: [error-handling]
+
+  - agent: store-builder
+    kind: state
+    role: state port and the MobX store implementing it
+    owns:
+      - "src/<domain>/ports/<domain>State.port.ts"
+      - "src/<domain>/<domain>.store.ts"
+      - "src/shared/*/*.store.ts"
+    excludes: ["src/shared/app/**"]
+    rules:
+      - "The state port holds no MobX type — ReadonlyMap, arrays, domain types only."
+      - "Setters and getters only. Dedupe, ordering and cascades are domain functions."
+    reference: "src/note/note.store.ts"
+    owns_tests: false
+    depends_on: [domain-builder]
+    parallel_with: [repository-builder]
+    optional: true
+    skills: []
+
+  - agent: use-case-builder
+    kind: application
+    role: feature cores, their registration and CoreArgs
+    owns:
+      - "src/<domain>/features/**"
+      - "src/<domain>/<domain>.core.ts"
+      - "src/<domain>/<domain>.core.args.ts"
+      - "src/<domain>/<domain>.core.test.ts"
+      - "src/shared/*/*.core.ts"
+      - "src/shared/*/*.core.test.ts"
+    excludes: ["src/shared/app/**"]
+    rules:
+      - "The core calls rules; it does not write them. Missing rule → blocked → domain-builder."
+      - "Decide from the entity given or loaded, never from a state read."
+      - "Inject clock, ids, scheduler, openers. Never new Date(), uuidv7(), setTimeout, window, mobx."
+      - "<Domain>CoreArgs imports only ports. Never self-start a reaction or timer."
+      - "Export <Feature>InputSchema (ArkType) when the view-model has a form."
+    reference: "src/note/features/createNote/createNote.core.ts"
+    owns_tests: true
+    depends_on: [repository-builder, store-builder]
+    parallel_with: []
+    optional: false
+    skills: [error-handling]
+
+  - agent: view-model-builder
+    kind: presentation
+    role: view-model hooks, their private hooks and error→i18n mappers, and tests
+    owns:
+      - "app/**/*.ts"
+      - "app/**/*.test.tsx"          # view-model tests and private-hook tests
+    excludes:
+      - "app/routes.ts"
+      - "app/routes/**"
+      - "app/lib/**"
+      - "app/vite-env.d.ts"
+      - "app/**/index.ts"
+    rules:
+      - "Cores and read-only state only through useAppContext()."
+      - "Never call a store setter; every mutation is a core method."
+      - "Map error.kind to an i18n key; never compare error.message."
+      - "useForm<typeof Schema.infer> with the core's input schema; no local form type."
+      - "Tests spy on real cores (call-through) with fakes injected; never stub a core's return."
+    owns_tests: true
+    depends_on: [use-case-builder]
+    parallel_with: []
+    optional: false
+    skills: [presentation-model, error-handling]
+
+  - agent: component-builder
+    kind: driving-adapter
+    role: .tsx components, stories, barrels, locale keys
+    owns:
+      - "app/**/*.tsx"
+      - "app/**/index.ts"
+      - "public/locales/{en,fr}/*.json"
+    excludes:
+      - "app/**/*.test.tsx"
+      - "app/routes/**"
+      - "app/lib/**"
+      - "app/root.tsx"
+      - "app/entry.client.tsx"
+      - "app/entry.server.tsx"
+    rules:
+      - "Call use<Feature>ViewModel() and render. No useState/useEffect/useMemo holding logic, no useAppContext()."
+      - "Every user-visible string through t(); keys in both en and fr."
+      - "Atoms and molecules under app/components/ get a .stories.tsx."
+    owns_tests: false
+    depends_on: [view-model-builder]
+    parallel_with: []
+    optional: false
+    skills: [i18n]
+
+  - agent: wiring-agent
+    kind: wiring
+    role: composition root, routes, app shell
+    owns:
+      - "src/shared/app/**"
+      - "app/routes.ts"
+      - "app/routes/**"
+      - "app/root.tsx"
+      - "app/entry.client.tsx"
+      - "app/entry.server.tsx"
+      - "app/lib/**"
+    rules:
+      - "Construct adapters here and nowhere else; HTTP vs inMemory* by VITE_IN_MEMORY_REPOSITORIES."
+      - "Never import from src/*/tests/."
+      - "Subscriptions that trigger cores hold no condition beyond passing data."
+      - "Route files are one-line re-exports."
+    owns_tests: false
+    depends_on: [view-model-builder, component-builder]
+    parallel_with: []
+    optional: true
+    skills: []
+
+plan:
+  depth: single
+  scout_name: feature-scout
+  impact_scout: true          # .codegraph/ present
+  spec:
+    enabled: true
+    path: docs/spec.md
+    submodule: false
+
+verify:
+  layer_reviewer_checklist:
+    - "domain/** imports nothing but neverthrow and other domain/ modules."
+    - "No ReturnType<typeof create…> as a port; adapters and fakes annotated with the port."
+    - "No responseType:, backend casing or wire enum outside adapters/."
+    - "No gating condition, limit or cascade in a core body, store, view-model or component."
+    - "View-models call no store setter; components call no useAppContext()."
+    - "View-model tests assert core calls, never what the core wrote."
+    - "Every user-visible string through t(), keys in en and fr."
+  # Lifted from the migration doc's detection commands. All print nothing today; keep it so.
+  mechanical_checks:
+    - description: "port derived from adapter"
+      command: "grep -rn 'ReturnType<typeof create.*Repository' src | grep -v -e '\\.test\\.' -e /tests/"
+      scope: repo
+      expect: empty
+    - description: "wire shapes outside adapters"
+      command: "grep -rn 'responseType:' src --include='*.ts' | grep -v -e adapters/ -e shared/httpClient/ -e '\\.test\\.'"
+      scope: repo
+      expect: empty
+    - description: "framework, browser, time or uuid in cores"
+      command: "grep -rnE 'from \"mobx\"|\\b(window|document|navigator|localStorage)\\.|setTimeout|setInterval|new Date\\(\\)|Date\\.now\\(\\)|from \"uuid\"' src --include='*.core.ts'"
+      scope: repo
+      expect: empty
+    - description: "view-models writing stores"
+      command: "grep -rnE '[a-z]+Store\\.(set|add|remove|clear|update)[A-Za-z]*\\(' app --include='*.ts' --include='*.tsx' | grep -v '\\.test\\.'"
+      scope: repo
+      expect: empty
+    - description: "components reaching into the context"
+      command: "grep -rl 'useAppContext' app --include='*.tsx' | grep -v -e '\\.test\\.' -e '\\.stories\\.'"
+      scope: repo
+      expect: empty
+    - description: "test fakes in the composition root"
+      command: "grep -n 'tests/' src/shared/app/app.provider.tsx"
+      scope: repo
+      expect: empty
+  arch_tests:
+    # The greps above are the only enforcement. Candidate: generate,
+    # dependency-cruiser, .dependency-cruiser.cjs — the same rules as forbidden
+    # edges, so they fail the gate instead of the review.
+    status: none
+    tool: ""
+    path: ""
+    rules: []
+
+testing:
+  placement: colocated
+  path_formula: "src/<domain>/domain/<entity>.test.ts, src/<domain>/adapters/<domain>.dto.test.ts, src/<domain>/features/<feature>/<feature>.core.test.ts, app/**/<feature>.view-model.test.tsx"
+  runners:
+    - { name: vitest, covers: [domain-builder, repository-builder, use-case-builder, view-model-builder] }
+  doubles:
+    style: hand-written-fakes
+    location: "src/<domain>/tests/*.fake.ts"
+    rule: "Never fake cores or stores in a view-model test — inject fake repositories and run the real core."
+    typed_as_port: true
+  spy_technique: "vi.spyOn(core, \"method\") without a mock implementation — it calls through to the real core"
+  red_stub: "export the function with its final signature and a body returning errAsync({ kind: \"unexpected\" }) — vitest does not typecheck, so RED is an assertion failure"
+  tested_layers: [domain-builder, repository-builder, use-case-builder, view-model-builder]
+  naming: user-facing
+
+skills:
+  invariant: [hexagonal-architecture, tdd, separation-of-concerns, extract-til-you-drop, orchestrator]
+  filled: [architecture, testing, error-handling]
+  optional:
+    i18n: { enabled: true, locales: [en, fr], rule: "t(\"<namespace>:<key>\"); every key in both public/locales/en and public/locales/fr (\"TODO: translate\" if unknown)" }
+    component_design: { enabled: true, preview: storybook, platform: web }
+    presentation_model: true
+    modules: false
+    spec_implement: false
+
+emit:
+  cursor_compat: false
+  agent_suffix: ".md"
+  memory_file: ".claude/CLAUDE.md"
+  standing_authorization: true
+  runner_model: ""
+  hooks:
+    receipt_check: false

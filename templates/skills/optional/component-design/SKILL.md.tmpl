@@ -1,0 +1,130 @@
+---
+name: {{COMPONENT_SKILL}}
+description: "Component design for {{PROJECT_NAME}} ({{COMPONENT_PLATFORM}}): which tier a UI component belongs to, where its file goes, when to reuse versus create, when and how to split a component that grew, and what a component may contain. Always use when creating, placing, splitting or significantly editing a UI component, building a screen, or reviewing a component that might be too large or might hold behaviour. A component is a humble view, the outermost part of the driving side: it renders what it is given and forwards user intent, nothing else — no state, effect or memo hooks."
+---
+
+<!-- harness: emitted when skills.optional.component_design.enabled. Fill
+     COMPONENT_TIERS_TABLE from the repo's real component folders (tier, path,
+     what lives there, one real example each). COMPONENT_PREVIEW_RULE by
+     skills.optional.component_design.preview — storybook: "Every reusable
+     component (the two lowest tiers) has a story file beside it showing each
+     variant and state; build it in isolation there before using it in a
+     feature." none: "There is no preview tool in this repo. Do not add preview or story files. Keep the two lowest tiers props-only (no context, no use case) so one can render them later."
+     PLATFORM_UI_RULES from the stack pack's section for
+     skills.optional.component_design.platform: one bullet per rule, with the
+     platform's real primitive and prop names (e.g. react-native: list
+     primitive for long lists rather than mapping in a scroll container, safe
+     areas, minimum 44x44 touch targets, pressed/disabled styles instead of
+     hover, accessibility labels through the translation call, platform files
+     over runtime platform branches; web: semantic elements, keyboard focus,
+     labels for inputs). Empty: drop the "Platform rules" section.
+     VIEW_STATE_HOOKS: the stack's names for local-state, effect, memoisation
+     and callback hooks or their equivalent (e.g. `useState`, `useEffect`,
+     `useMemo`, `useCallback`), and VIEW_REF_EXCEPTION: the stack's narrow
+     exception (e.g. "`useRef` + an effect calling a native method on a node
+     this component renders — focus, scroll, measure — deriving no state"). Drop every PRESENTATION_SKILL
+     and I18N_SKILL mention when that skill is not enabled. Strip every harness
+     comment at render. -->
+
+# Component design
+
+## Components render, nothing else
+
+A component is a **view** — the humble, outermost part of the driving side: it
+receives data and callbacks and renders them. Behaviour lives one step in — in
+the presentation model (`{{PRESENTATION_SKILL}}`), and rules live in the domain.
+
+- **No state, effect or memoisation in a view** ({{VIEW_STATE_HOOKS}}), and no
+  derived state. If you want one, that logic belongs in the presentation model:
+  build the rest and report `STATUS: blocked` naming the exact keys it must
+  expose (`isDialogOpen`, `openDialog`, `canSubmit`).
+- **The one narrow exception:** {{VIEW_REF_EXCEPTION}}. Purely ephemeral
+  presentation state with no logic and no link to any presentation-model value
+  (a hover flag, a tooltip open) is also acceptable. The lowest tier wrapping a
+  platform primitive's own interaction (focus, pressed state, a controlled
+  input) is the same exception.
+- **No application access.** A view never reaches the use cases, the
+  composition root's context or a store. Its presentation model does.
+- **No effect that triggers work.** Loading on mount, refreshing on a route
+  change, analytics, navigation: the presentation model does it.
+- **No business constants or status checks.** Render the boolean the
+  presentation model exposes (`canSubmit`), never a status compared inline or
+  a cap checked in markup.
+- **Handlers only forward.** An event handler calls one presentation-model
+  callback; it does not guard, sequence or clear fields.
+- **Every visible string is translated** (`{{I18N_SKILL}}`).
+
+State gets smuggled into views under innocent names. Each of these belongs in
+the presentation model:
+
+| Smuggled in as… | Actually is |
+|---|---|
+| "just a controlled input" — local state for a draft, query or filter | a value and setter the presentation model owns |
+| "just presentation" — `canSubmit` computed from a value and a loading flag | derived display state |
+| "just wiring" — a handler that guards, calls the model, then clears a field | orchestration |
+| "just a default" — local state seeded from a prop or model value | an initial value the model owns |
+
+## Tiers
+
+{{COMPONENT_TIERS_TABLE}}
+
+A lower tier never imports a higher one. A reusable tier never imports a
+feature folder.
+
+## Reuse first
+
+Before creating a component, search, in order: the lowest tier (is there a
+button, input, icon that fits?), then the reusable composites, then the
+feature's siblings. Create only what is genuinely new. Extend an existing
+component with a variant rather than forking a near-copy.
+
+## Size and splitting
+
+A component does one nameable thing. Split it when any of these is true:
+
+- its markup runs past roughly 80–100 lines (imports and types excluded);
+- it renders two or more sections you could describe independently;
+- a conditional branch is large enough to stand alone;
+- it renders non-trivial markup per item of a collection — extract the item;
+- you are about to write a comment like "left column" or "participants
+  section" — that comment marks a component boundary.
+
+Test for a split: if you deleted the block, would the parent still make sense?
+Then extract it, passing only the props it needs — never a whole object "in
+case". Name it in plain words (`ParticipantCard`, `ReportListItem`); if no
+good name comes, the boundary is wrong.
+
+Do not over-split: a two-line fragment used once, with no identity of its own,
+stays inline. This is `extract-til-you-drop` applied to markup.
+
+## Props
+
+- Props are typed explicitly, in the project's own vocabulary.
+- Data in, callbacks out. A component never receives a use case, a port or a
+  store.
+- Display-ready values come in already derived; the component does not compute
+  them from raw domain data.
+
+## Platform rules
+
+{{PLATFORM_UI_RULES}}
+
+## Previews
+
+{{COMPONENT_PREVIEW_RULE}}
+
+## Testing
+
+Components that only render what they are given are not unit-tested for logic
+— they have none. Behaviour is tested in the presentation model
+(`{{TESTING_SKILL}}`). If a component seems to need a behaviour test, it holds
+behaviour that belongs one step in.
+
+## Checklist before reporting
+
+- [ ] Searched the existing tiers before creating anything.
+- [ ] File in the right tier and path.
+- [ ] No state/effect/memo hook beyond the narrow exception, no application access, no rule.
+- [ ] Platform rules followed.
+- [ ] Split where a block has its own identity; nothing over-split.
+- [ ] Preview present where the preview rule requires one.

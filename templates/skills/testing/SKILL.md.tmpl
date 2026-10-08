@@ -1,0 +1,201 @@
+---
+name: {{TESTING_SKILL}}
+description: "Test conventions for {{PROJECT_NAME}} — where test files go, which runner covers which layer, how to build fakes typed as the port, how to structure, name and seed tests, what to assert. Use whenever writing or reviewing tests for {{TESTED_LAYERS_PROSE}}, writing a fake, fixture or test double, testing happy/error/validation paths, testing a mapper or a driving adapter, or when asked 'how do I test this?'. Also use whenever moving or extracting logic into a tested layer — even a pure refactor with no test requested — to cover the relocated behaviour before considering the work done. The red-green loop itself lives in the tdd skill; this skill is the conventions that loop runs inside."
+---
+
+# Testing
+
+## Relation to the `tdd` skill
+
+`tdd` owns the loop: failing test first, watch it fail for the expected reason,
+minimum code, watch it pass. That is always on and is not restated here.
+
+This skill owns the conventions that loop runs inside: where the file goes, what
+the doubles look like, how the test is structured, what it asserts.
+
+Tests document behaviour from the caller's point of view. They are the reason the
+design stays injectable.
+
+## What is tested
+
+{{TESTED_LAYERS_TABLE}}
+
+- **Domain rules** are tested once, in the domain, pure input → output. Most
+  rules are tested here.
+- **Use cases** are tested with real domain code and fakes for every driven
+  port. A use-case test proves the use case *uses* the rule — one case per
+  branch the use case takes — and does not re-enumerate every input the rule
+  handles.
+- **Mappers / translators** in driven adapters are tested, without the I/O: one
+  case per enum value, each date/number format, null and absent fields, and each
+  raw failure → typed error classification.
+- **Driving adapters and presentation models** are tested at their own
+  behaviour — input parsing, which use case is called and when, error →
+  transport/message mapping — without re-asserting the use case's behaviour.
+  See "Testing driving adapters" below.
+
+Not unit-tested: a driven adapter's I/O (the query, the HTTP call, the file
+write) and framework plumbing. They contain no decisions; integration or
+contract tests cover the I/O where the repo has them, and otherwise the bar is
+that they are *injectable* so that everything above them is testable. State
+holders are not tested either: they hold fields and setters only. If one feels like it needs a test, it holds logic, and that logic
+is in the wrong place — move it to the domain.
+
+## Where tests live
+
+Placement: **{{TEST_PLACEMENT}}**. Path formula: `{{TEST_PATH_FORMULA}}`
+
+<!-- harness: TEST_PLACEMENT_RULE by testing.placement —
+colocated: "The test file sits in the same directory as the unit it covers."
+sibling-file: "The test file sits next to the unit's file, as its named sibling (e.g. Go `_test.go`, Rust `<file>/tests.rs`)."
+mirrored-tree: "Tests live in a separate tree that mirrors the source tree path for path; one test file per source file."
+separate-project: "Tests live in a dedicated test project per production project, mirroring its namespaces; the test project references the production project, never the reverse." -->
+{{TEST_PLACEMENT_RULE}}
+
+One test file per unit of behaviour. Never a feature-wide or module-wide dump
+file — those become append-only and nobody reads them.
+
+`{{DOUBLES_LOCATION}}` holds fakes and fixtures only — never a test, never a
+helper with a rule in it. Production code, including the composition root, never
+imports from it.
+
+## Commands
+
+{{TEST_RUNNERS_TABLE}}
+
+Run every command from `{{WORKDIR}}`.
+
+Targeted run: `{{TEST_TARGETED}}` — {{TEST_TARGET_HINT}}
+Full suite: `{{TEST_ALL}}`
+Gate, before reporting: {{GATE}}
+
+{{HYGIENE_SHORT}}
+
+## Making RED a real run
+
+`tdd` requires the new test to run and fail on an assertion. Before the code
+exists, declare it with the stub for its return shape — real name, parameters
+and return type, no behaviour. GREEN replaces the stub.
+
+<!-- harness: RED_STUB_TABLE from testing.red_stub. A map renders as
+"| Return shape | Layers | Stub |", one row per key (sync / async / hook …),
+the Layers column naming the agents whose units return that shape. A string
+renders as one sentence: "Stub: <red_stub>." Then, from the stack pack, one
+sentence on when a not-implemented throw/panic is acceptable (only when the
+test output names that stub as the cause), or nothing for a dynamic language
+where a call-time missing-function error inside the test is acceptable red. -->
+{{RED_STUB_TABLE}}
+
+<!-- harness: CACHE_RULE from the stack pack's test-caching note: the runner's
+cache marker (e.g. "(cached)"), the flag the targeted command uses to disable
+it, and "a cached pass is not a run — re-run until it executes". Empty when
+the stack's runners do not cache results. -->
+{{CACHE_RULE}}
+
+## Test doubles
+
+Style: {{DOUBLES_STYLE}}. Location: `{{DOUBLES_LOCATION}}`.
+
+{{DOUBLES_RULE}}
+
+Three doubles cover nearly everything:
+
+- **success double** — in-memory, seedable, returns realistic data.
+- **error double** — configurable to return a specific typed failure for the
+  next call (a small control such as "fail next with NotFound"), rather than a
+  per-test stubbed return value.
+- **pending double** — does not complete until the test releases it, so an
+  in-progress state can be asserted. Only where the unit has one.
+
+**A fake is declared as the port type, never inferred from the fake.** The test
+variable and the fake's own declaration name the port explicitly, so the
+compiler checks the fake against the contract. A variable typed from the fake
+compiles even after the fake has drifted from the real adapter, and the test
+then proves nothing about production. {{FAKE_PORT_TYPING}} Controls the test
+needs beyond the port are added alongside the port type, never instead of it.
+
+**Shared ports have shared fakes.** Time, ids and delays come through ports; the
+fakes to use are the ones listed in `{{ARCH_SKILL}}` → "Shared capability
+ports" (a fixed or steppable clock, sequential ids, a manual scheduler the test
+advances). Never patch global time — no fake-timer mode, no monkeypatched clock
+— to work around a missing port. A missing port is a design fix, not a test
+trick.
+
+**Never fake:**
+
+- the unit under test — testing a caller with a faked callee means you tested
+  the fake;
+- a use case — build the real one over faked driven ports;
+- a state adapter — use the real one, it holds no logic.
+
+**Seed state the way the app would.** Arrange a scenario through a use case or
+by seeding the fake repository. Never call state setters directly to arrange a
+scenario the unit could not reach, and never assert on state-holder internals.
+
+**Fixtures are typed.** Build domain values through small fixture builders with
+sensible defaults. If a fixture does not type-check, the builder is wrong — fix
+it. Never silence it with a type escape hatch ({{TYPE_ESCAPE_HATCHES}}) or by
+force-unwrapping a value that should have been valid.
+
+## Structure
+
+Given / When / Then, in that order, with blank lines between them. One behaviour
+per test. If a test needs the word "and" to describe it, it is two tests.
+
+Prefer one setup helper at the top of the file that builds the unit with its
+doubles (a `makeSut`-style factory, fixture class or builder), so each test
+differs only in what it is actually about.
+
+## What to assert
+
+- The **returned value** — the caller's contract.
+- The **observable state change**, through the port's read side, if the unit
+  owns one.
+- The **typed error**, on the failure path — discriminate it by
+  {{ERROR_DISCRIMINATE_BY}}. Never by a substring, prefix or equality of its
+  message text.
+
+Do not assert on internals, call counts of things that are not the contract, or
+the behaviour of third-party libraries. Those assertions break on every refactor
+and prove nothing.
+
+## Testing driving adapters and presentation models
+
+A driving adapter's test checks the adapter and nothing else. The use case it
+calls already has its own tests.
+
+**Build it for real.** Use real use cases with doubles for every driven port. Do
+not mock the use case. To observe the calls the adapter makes, use a
+**call-through spy**: {{SPY_TECHNIQUE}} The real code still runs, so the wiring
+is exercised and a signature mismatch fails the test. The spy only records
+*when* and *with what* the use case was called.
+
+**Drive outcomes through the doubles.** To test an error branch, make the fake
+port return the typed error. Never stub the use case's return value.
+
+| Assert | Do not assert |
+|---|---|
+| The use case is called, with the right arguments | What the use case wrote to state/storage |
+| It is called at the right moment: on the event not at startup, once not twice, after debounce not before | Which port method the use case called |
+| It is **not** called: invalid input, disabled state, duplicate trigger, teardown | The domain result of a rule the use case applies |
+| What the adapter exposes for each outcome (status code, exit code, view state — success and each error case) | Anything already asserted in the use case's test |
+| The adapter's own logic: input parsing, error → transport/message mapping, loading/dialog flags | |
+
+**Before writing an adapter test, find the use-case test for the same
+behaviour.** If one exists, assert the *call*, not the *effect*. If none exists
+and the behaviour is a business rule, the rule is in the wrong layer. Move it
+inward (`separation-of-concerns`) and test it there.
+
+Budget: about one interaction test per handler, plus one reaction test per
+outcome the adapter handles differently. An adapter test file larger than the
+tests of the use cases it calls is a sign that it is re-testing them.
+
+## Naming
+
+{{NAMING_RULE}}
+
+## Coverage bar
+
+The tested layers must never have bugs. A bug found there means the coverage was
+insufficient: add the test that would have caught it, watch it fail against the
+buggy code, then fix.

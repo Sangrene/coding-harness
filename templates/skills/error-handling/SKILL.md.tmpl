@@ -1,0 +1,123 @@
+---
+name: {{ERRORS_SKILL}}
+description: "Typed error flow and input validation in {{PROJECT_NAME}} using {{ERROR_TYPE}}. Use whenever writing or modifying a function that can fail, returning, wrapping, matching or propagating an error, handling a failure from a library, driver or HTTP call, deciding where a raw failure becomes a domain error, validating input, or reviewing error handling. Covers the error type, how callers tell failures apart, where each failure is classified, composition, conversion at boundaries, validation placement, and the anti-patterns that make failures invisible."
+---
+
+# Error handling — {{ERROR_TYPE}}
+
+<!-- harness: ERROR_RULE by architecture.errors.never_throw —
+true: "Inner layers never throw or panic for an expected failure. Every function that can fail returns {{ERROR_TYPE}}; the failure is a value the caller must handle."
+false: "Expected failures are signalled with the domain exception types below, declared by the domain and thrown only for domain cases; infrastructure exceptions are caught and translated in adapters and never propagate inward."
+ERROR_CLASSIFICATION_TABLE: "| Raw failure | Becomes | Classified in |" + one row per architecture.errors.classification entry.
+ERROR_COMPOSITION_IDIOMS: the stack pack's composition idioms for ERROR_TYPE, one bullet each with a one-line snippet (e.g. combine several results, collect all errors, chain async steps, wrap a throwing call at the boundary); empty when the stack pack has none.
+ERROR_BOUNDARY_RULES: one bullet per rule on where an infrastructure error type may appear, from the repo's real code and the stack pack (e.g. "the HTTP client's error type only under <adapters path>"; "one error subclass per domain, pick one style"); "None beyond the classification table." if empty.
+TRAPS_WITH_EXAMPLES: one entry per architecture.errors.traps entry plus the stack pack's traps for ERROR_TYPE: a bold one-line trap, then a short before/after code pair in the repo's language (real code where the repo has it); "None recorded." if empty. -->
+## The rule
+
+{{ERROR_RULE}}
+
+Expected failures are part of a function's contract: typed, declared, and
+distinguishable by the caller. "The email was already taken" is an expected
+failure. Panics, crashes and unchecked exceptions are reserved for programmer
+errors and unrecoverable conditions.
+
+## The error type
+
+{{ERROR_TYPE_DETAIL}}
+
+Callers tell failures apart by **{{ERROR_DISCRIMINATE_BY}}** — never by reading
+an error message. The message is for humans and logs; nothing branches on it.
+
+Where the language checks a match for exhaustiveness, do not add a catch-all
+branch that would hide a newly added failure case — let the compiler point at
+every caller. Where it does not, handle each known case explicitly and route
+everything else to one named "unexpected" path that keeps the cause.
+
+## Where errors are classified
+
+{{ERROR_CLASSIFICATION_TABLE}}
+
+Each layer speaks its own error vocabulary:
+
+- **Driven adapters** classify raw infrastructure failures (status code, driver
+  error, parse failure, library exception) into the port's typed error cases.
+  Raw failures never escape an adapter.
+- **Inner layers** pass adapter errors through or add domain cases. They never
+  import, construct or inspect an infrastructure error type.
+- **Driving adapters** map the typed error to their transport
+  ({{OUTER_MAPPING}}). They never inspect the wrapped cause to decide.
+
+Where infrastructure error types may appear:
+
+{{ERROR_BOUNDARY_RULES}}
+
+## Composition
+
+{{COMPOSITION_PATTERNS}}
+
+{{ERROR_COMPOSITION_IDIOMS}}
+
+## Handling
+
+Handle both branches explicitly at the point where a decision is made. Never
+swallow a failure into a default value silently; if a default is correct, that is
+a decision and it deserves a name — a named helper or a domain rule.
+
+**A no-op branch is allowed only when the callee already handled it, and it
+must say so.** A caller may ignore a branch, or the whole result, when the
+callee has already recorded that branch's effect where the caller reads it:
+the use case wrote the success or the failure into the state the caller
+renders. Name the no-op so a reviewer can tell it was chosen, not forgotten.
+Use a named constant (`stateAlreadyUpdated`) or a one-line comment at the call
+naming where the effect lives. A failure that is recorded nowhere and ignored
+here is the swallow anti-pattern below, however it is spelled. The reviewer
+applies exactly this rule: an unexplained no-op is a finding, an explained one
+whose claim holds is not.
+
+## Validation
+
+Library: {{VALIDATION_LIBRARY}}. Placement: {{VALIDATION_PLACEMENT}}.
+
+- **Shape validation** (is this well-formed?) happens once, where untrusted
+  input enters — the driving adapter — and its output is a domain type, not the
+  raw input with a flag.
+- **Invariants** (can this value exist?) are enforced by the domain type's
+  constructor or factory, which returns the typed error. No other code
+  re-checks them.
+- **Business validation** (is this allowed now?) is a domain rule or a use-case
+  policy, never a schema annotation or a handler `if`.
+- A validation failure is a typed error like any other; it is mapped to the
+  transport by the driving adapter, not thrown past it.
+
+## Anti-patterns
+
+Each of these makes a failure invisible or untyped. They hold in every language.
+
+1. **Losing the cause.** When an adapter wraps a failure, keep the original
+   (the language's cause/inner-error mechanism) for logging. **Never parse it later** — the cause is for
+   humans, the typed case is for code.
+2. **Deciding on message text.** Comparing, searching or prefix-matching an
+   error's message, or a magic-string sentinel. This is a string-typed error.
+   Comparing error *identity* (a sentinel value, a type match) is fine — the
+   rule bans comparing *text*.
+3. **Swallowing both branches.** An empty catch, a discarded result, a
+   conversion that drops the error, a match whose both arms do nothing. Every failure disappears. At minimum, report it through a port
+   (logger, alerter, error reporter).
+4. **Re-wrapping by message.** Building a new error from the old one's text, or
+   string-matching to avoid double prefixes. If the adapter already returned a
+   typed error, pass it through; if context is needed, wrap preserving the
+   case and the cause.
+5. **Converting in the wrong layer.** Turning exceptions, rejections or panics
+   into values (a catch around a library call, a throw-to-result helper)
+   belongs in adapters. A use case receives
+   already-typed values and never contains a catch-all conversion.
+6. **A string-typed catch-all case.** A generic "error with a message" case used
+   for business failures. Add a named case instead; reserve one "unexpected"
+   case, carrying the cause, for failures nobody can classify.
+7. **Infrastructure error in a port signature.** A driver, HTTP-client or
+   framework error type in a port's return type moves classification into every
+   caller.
+
+## Traps in this stack and repo
+
+{{TRAPS_WITH_EXAMPLES}}

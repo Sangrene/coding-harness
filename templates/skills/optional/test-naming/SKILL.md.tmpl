@@ -1,0 +1,80 @@
+---
+name: {{TEST_NAMING_SKILL}}
+description: "User-facing test names in {{PROJECT_NAME}}: how to write and rewrite test labels from the user's or caller's point of view instead of the implementation's. Use whenever writing a new test, editing a test file, renaming test groups or cases, cleaning up Given/When/Then wording, or when asked to make tests more readable, less technical or more behaviour-focused — even for 'just rename the tests'. Only the labels change; assertions stay technical where they need to."
+---
+
+<!-- harness: emitted when testing.naming is user-facing. Fill TEST_NAME_SHAPE
+     from the repo's existing best-named tests: the grouping construct and its
+     labels (e.g. outer group "I want to …", nested "When …" / "Given …", case
+     "Then …"), or, where the language names tests by method name, the method
+     name pattern. Rewrite every example below with real scenarios from the
+     repo. Strip every harness comment at render. -->
+
+# Test naming
+
+A test name says what someone using the unit is trying to do, in what
+situation, and what they get. It is not vague — it is behaviour, in words a
+reviewer understands without opening the implementation.
+
+## Shape in this repo
+
+{{TEST_NAME_SHAPE}}
+
+If a file already uses a simpler shape and the task is not a rewrite, keep its
+structure and improve only the wording.
+
+## Rules
+
+### 1. Start from intent, not mechanism
+
+| Prefer | Avoid |
+|---|---|
+| When I open the alert list | When the hook is rendered for the first time |
+| Then the list refreshes | Then listAlerts was called twice |
+| Then the requested page and sort are used | Then the repository receives the built query |
+
+### 2. Translate the technical check into its meaning
+
+When a test asserts a mechanism (a call, a count, an argument), name it after
+the reason that mechanism matters to the user or caller. The assertion stays
+precise; the label states the behaviour.
+
+### 3. Be concrete
+
+"Then the close dialog stays open", "Then my current filters are applied" —
+not "Then it works", "Then success", "Then data updates".
+
+### 4. Keep internal names out
+
+No function, hook, store field, repository method, mock or callback names in a
+label — unless the word is part of the domain language the user shares
+(`alert`, `report`, `draft`, `next page`).
+
+### 5. Short enough to scan
+
+One idea per label, product language, no justification clause. It must still
+read well in the runner's failure output.
+
+## Not every unit has a user
+
+A pure function, a mapper or a low-level contract has a caller, not a user.
+Name its tests from the caller's point of view in plain behaviour terms
+("rejects a title longer than the limit", "maps an absent date to none") rather
+than inventing a fake product sentence.
+
+## Rewriting a file
+
+1. Read each scenario and its assertions first.
+2. Name the user's goal at the outermost group.
+3. Name the situation or action at the nested level.
+4. Name the outcome at the case.
+5. Change labels only: logic, assertions and coverage stay as they were unless
+   the task asked for more.
+
+## Checklist
+
+- [ ] Every label states behaviour, not implementation.
+- [ ] Someone new to the file understands each scenario from its labels.
+- [ ] No internal identifiers unless they are domain words.
+- [ ] Existing structure kept unless a rewrite was requested.
+- [ ] Labels still precise enough to locate a failure.

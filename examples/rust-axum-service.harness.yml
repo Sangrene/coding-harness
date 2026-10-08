@@ -1,0 +1,289 @@
+# Modelled on a real Rust/Axum codebase — a service instance, and a
+# modular monolith: one library crate per business module, a shared kernel and
+# an `app` binary.
+#
+# Differences from the repo's own harness, deliberate:
+#   - paths are crates/<module>/src/**. The repo's agents still say src/domain/**
+#     from before the crate split; the code moved, the harness did not.
+#   - no separate test-author. Each builder owns the tests.rs files under its
+#     own tree (v2: the domain layer must own its tests).
+#   - `**/mod.rs` is no longer the wiring agent's: a mod.rs belongs to the layer
+#     whose tree it sits in. Wiring keeps lib.rs, the app crate and Cargo.toml.
+harness_version: 2
+
+project:
+  name: acme-api
+  kind: service
+  stack: rust
+  language: "Rust 2021 edition"
+  frameworks: ["Axum 0.7", "sqlx 0.8 (Postgres)", "tokio", "rig-core"]
+  summary: Axum + sqlx backend, modular monolith with hexagonal layering inside each module crate.
+
+commands:
+  run: cargo
+  exec: ""
+  add_dependency: "cargo add -p <crate> <dep>"
+  gate:
+    # --all-targets so #[cfg(test)] mod tests; compiles too; plain `cargo check` skips it.
+    - "cargo check --workspace --all-targets"
+  gate_name: compile-guard
+  test_targeted: "cargo test -p {package} {filter}"
+  test_target_hint: "{package} = the module crate (note, report, identity, …), {filter} = a test path substring such as note_service::tests"
+  test_all: "cargo test --workspace --locked"
+  lint: ""
+  arch_test: ""
+  hygiene:
+    - "Never append 2>&1 to any command."
+    - "Never rely on the linter for correctness — always cargo check."
+    - "Prefer &str over String in signatures."
+
+carry_forward:
+  - "Try to use `&str` as much as possible instead of `String`."
+  - "When implementing logic in domain or application layers, follow the extract-til-you-drop skill."
+
+dev_run:
+  command: "cargo run -p app"
+  fakes_flag: "leave POSTGRES_URL and PROVIDER_API_KEY unset — main.rs falls back to InMemory* repositories and the fake notification service"
+  notes:
+    - "Secrets live in .env, which is gitignored. Never read it into a prompt."
+
+architecture:
+  shape: full
+  dependency_rule: "Domain depends only on the shared kernel; application depends on domain ports; infrastructure implements ports and depends inward only; crates/app is the only crate that names concrete adapters."
+  hexagon:
+    domain_type:      { name: entity / value object,    path: "crates/<module>/src/domain/**, crates/shared/src/value_objects/**" }
+    domain_error:     { name: DomainError (thiserror),  path: "crates/shared/src/errors.rs" }
+    driving_port:     { name: "<Module>Service trait",  path: "crates/<module>/src/application/<module>_service.rs" }
+    driving_adapter:  { name: axum handler,             path: "crates/<module>/src/infrastructure/http/**" }
+    driven_port:      { name: repository / capability trait, path: "crates/<module>/src/domain/<thing>_repository.rs, crates/shared/src/{notification,summarizer}.rs" }
+    driven_adapter:   { name: "Postgres*Repository, provider adapters", path: "crates/<module>/src/infrastructure/{persistence,llm,storage,pdf,…}/**" }
+    # InMemory* repositories and Fake* providers are driven adapters: main.rs selects
+    # them in fakes mode. The test doubles are the test-only Fake*/Stub* structs.
+    test_double:      { name: "test-local Fake* / Stub*", path: "crates/<module>/src/**/tests.rs, crates/<module>/src/infrastructure/http/{test_helpers,test_support}.rs" }
+    composition_root: { name: main.rs,                  path: "crates/app/src/main.rs" }
+  exemplar_slice: "crates/note/"
+  leakage_examples: ["sqlx::FromRow", "sqlx::Error", "sqlx::types::Json", "axum::extract::*", "StatusCode", "rig-core completion types"]
+
+  errors:
+    type: "Result<T, DomainError>"
+    never_throw: true
+    discriminate_by: "enum variant"
+    classification:
+      - { source: "sqlx::Error / bad UUID from a row", becomes: "DomainError::RepositoryError", where: "crates/<module>/src/infrastructure/persistence/postgres_*.rs" }
+      - { source: "row absent", becomes: "Ok(None) at the port, <Entity>NotFound in the service", where: "crates/<module>/src/application/<module>_service.rs" }
+      - { source: "DomainError (outbound)", becomes: "ApiError with status + code", where: "crates/shared/src/http/to_api_error.rs" }
+    traps:
+      - "`.map_err(|e| DomainError::RepositoryError(e.to_string()))` on a not-found case hides NotFound"
+      - "`?` on a sqlx::Error inside a service means a driver type crossed the port"
+      - "`.unwrap()` on Uuid::parse_str outside tests"
+
+  validation:
+    library: none
+    placement: "value-object constructors (Email::new, Password::new, Uuid::parse) enforce invariants; handlers only deserialize"
+
+  type_escape_hatches: ["unwrap()", "expect()", "Uuid::from_string_unchecked", "unsafe", "as (numeric casts)"]
+
+  modules:
+    enabled: true
+    unit: "one library crate per business module under crates/, plus crates/shared (kernel) and crates/app (binary)"
+
+conformance:
+  # Ports in domain/, adapters translate, errors classified, main.rs wires only.
+  # DomainError lives in the shared kernel and carries every module's variants:
+  # a recorded shared-kernel decision, not a gap.
+  level: partial
+  gaps:
+    - role_or_rule: test_double
+      finding: >
+        InMemory* repositories and Fake* providers are driven adapters main.rs
+        selects in fakes mode, yet service and handler tests (note_service/tests.rs,
+        identity user_service/tests.rs, */http/test_helpers.rs) also use them as
+        their doubles. There is no test-only doubles location; test-only fakes are
+        declared inline per tests.rs.
+      paths:
+        - "crates/*/src/infrastructure/persistence/in_memory_*.rs"
+        - "crates/*/src/infrastructure/**/fake_*.rs"
+        - "crates/app/src/notification/fake_notification.rs"
+      disposition: migrate
+      layers: [service-builder, http-adapter, persistence-adapter, integration-adapter]
+
+layers:
+  - agent: domain-builder
+    kind: domain
+    role: entities, value objects, repository traits, shared kernel types and DomainError
+    owns:
+      - "crates/*/src/domain/**"
+      - "crates/shared/src/{errors,value_objects,tasks,processing_status}.rs"
+      - "crates/shared/src/{errors,value_objects,tasks,processing_status}/**"
+      - "crates/shared/src/{auth,notification,summarizer,fixtures}.rs"
+    rules:
+      - "No serde, sqlx, axum or rig type in domain."
+      - "Ports return Result<T, DomainError>; absence is Option, not an error."
+      - "Cross-module test fixtures are `#[cfg(any(test, feature = \"test-support\"))]`, never plain pub."
+    reference: "crates/note/src/domain/note.rs"
+    owns_tests: true
+    depends_on: []
+    parallel_with: []
+    optional: false
+    skills: [modular-monolith]
+
+  - agent: service-builder
+    kind: application
+    role: application services and their DTOs — orchestration across ports
+    owns: ["crates/*/src/application/**"]
+    rules:
+      - "Depends on ports (Arc<dyn Trait>) only, never on adapters."
+      - "No transport or persistence types in signatures."
+      - "Cross-module calls go through the other module's published service trait."
+    reference: "crates/note/src/application/note_service.rs"
+    owns_tests: true
+    depends_on: [domain-builder]
+    parallel_with: []
+    optional: false
+    skills: [modular-monolith]
+
+  - agent: persistence-adapter
+    kind: driven-adapter
+    role: Postgres repositories and their InMemory* counterparts
+    owns: ["crates/*/src/infrastructure/persistence/**"]
+    rules:
+      - "Classify driver errors into DomainError; raw sqlx errors never escape."
+      - "Every Postgres* adapter has an InMemory* counterpart with the same tests."
+      - "New tables need a migration in migrations/ — ask the orchestrator; that directory is not owned here."
+    reference: "crates/note/src/infrastructure/persistence/postgres_note_repository.rs"
+    owns_tests: true
+    depends_on: [domain-builder]
+    parallel_with: [http-adapter, integration-adapter]
+    optional: false
+    skills: []
+
+  - agent: integration-adapter
+    kind: driven-adapter
+    role: external providers (S3, PDF, email notifications, LLM summaries, JWT, password hashing)
+    owns:
+      - "crates/*/src/infrastructure/**"
+      - "crates/shared/src/{prompt,background}.rs"
+      - "crates/shared/src/{prompt,background}/**"
+      - "crates/app/src/notification/**"
+    excludes:
+      - "crates/*/src/infrastructure/persistence/**"
+      - "crates/*/src/infrastructure/http/**"
+      - "crates/*/src/infrastructure/mod.rs"
+    rules:
+      - "Every provider adapter ships a Fake* driven adapter beside it for keyless dev runs (main.rs selects it)."
+      - "Untrusted text sent to an LLM goes through shared::wrap_untrusted."
+    owns_tests: true
+    depends_on: [domain-builder]
+    parallel_with: [persistence-adapter, http-adapter]
+    optional: true
+    skills: []
+
+  - agent: http-adapter
+    kind: driving-adapter
+    role: axum handlers, routers, request/response types, error mapping
+    owns:
+      - "crates/*/src/infrastructure/http/**"
+      - "crates/shared/src/http/**"
+      - "crates/app/src/http/**"
+    rules:
+      - "Handlers parse, call a service, map errors with to_api_error. No business logic."
+      - "State<Arc<dyn XService>>, never a concrete service."
+      - "Handler tests use the module's TestAppBuilder in test_helpers.rs."
+    reference: "crates/note/src/infrastructure/http/validate_note_handler.rs"
+    owns_tests: true
+    depends_on: [service-builder]
+    parallel_with: [persistence-adapter, integration-adapter]
+    optional: false
+    skills: []
+
+  - agent: wiring-agent
+    kind: wiring
+    role: composition root, module exports, crate manifests
+    owns:
+      - "crates/app/src/main.rs"
+      - "crates/app/src/config.rs"
+      - "crates/app/src/data_migrations/**"
+      - "crates/*/src/lib.rs"
+      - "crates/*/src/infrastructure/mod.rs"
+      - "crates/*/Cargo.toml"
+      - "Cargo.toml"
+    rules:
+      - "main.rs picks Postgres vs InMemory by POSTGRES_URL and provider vs Fake by key presence; no other decision."
+    owns_tests: false
+    depends_on: [http-adapter, persistence-adapter]
+    parallel_with: []
+    optional: true
+    skills: []
+
+plan:
+  depth: full
+  scout_name: feature-scout
+  impact_scout: true          # .codegraph/ present
+  spec:
+    enabled: true
+    path: docs/spec.md
+    submodule: false
+
+verify:
+  layer_reviewer_checklist:
+    - "No framework type (serde, sqlx, axum, rig) appears in crates/*/src/domain/**."
+    - "Application services depend on ports, never on concrete adapters."
+    - "Business rules live in domain or application, never in an http handler."
+    - "Cross-module calls go through a published service trait, not another module's repository."
+    - "Adapter errors are classified into DomainError, never propagated raw."
+  mechanical_checks:
+    - description: "no framework crate in domain"
+      command: "grep -rnE '\\b(sqlx|axum|serde|rig)::' crates/*/src/domain"
+      scope: repo
+      expect: empty
+    - description: "no adapter import in application"
+      command: "grep -rn 'infrastructure::' crates/*/src/application"
+      scope: repo
+      expect: empty
+    - description: "no unwrap/expect in domain or application outside tests.rs"
+      command: "grep -rnE '\\.(unwrap|expect)\\(' crates/*/src/domain crates/*/src/application --include='*.rs' | grep -v '/tests.rs'"
+      scope: diff
+      expect: empty
+  arch_tests:
+    # Crate edges are already a boundary (Cargo refuses a missing dependency),
+    # but layers live inside one crate, so nothing fails the gate on
+    # domain → infrastructure. Candidate: generate, a deny test per crate that
+    # scans src/domain/** for `crate::infrastructure` and framework paths.
+    status: none
+    tool: ""
+    path: ""
+    rules: []
+
+testing:
+  placement: sibling-file
+  path_formula: "<file>.rs → <file>/tests.rs, declared as #[cfg(test)] mod tests; in <file>.rs"
+  runners:
+    - { name: cargo test, covers: [domain-builder, service-builder, persistence-adapter, integration-adapter, http-adapter] }
+  doubles:
+    style: hand-written-fakes
+    location: "crates/*/src/**/tests.rs, crates/*/src/infrastructure/http/{test_helpers,test_support}.rs"
+    rule: "Doubles are test-only Fake*/Stub* structs under #[cfg(test)] (or feature test-support); InMemory* and Fake* providers are driven adapters, not doubles — see conformance gap."
+    typed_as_port: true
+  spy_technique: "wrap the InMemory* adapter in a recording struct that implements the same trait and pushes each call into a Mutex<Vec<_>> before delegating"
+  red_stub: "declare the fn with its final signature and body `todo!()` — it compiles, the test fails at runtime"
+  tested_layers: [domain-builder, service-builder, persistence-adapter, http-adapter]
+  naming: technical
+
+skills:
+  invariant: [hexagonal-architecture, tdd, separation-of-concerns, extract-til-you-drop, orchestrator]
+  filled: [architecture, testing, error-handling]
+  optional:
+    i18n: { enabled: false }
+    component_design: { enabled: false }
+    presentation_model: false
+    modules: true
+    spec_implement: true
+
+emit:
+  cursor_compat: true
+  agent_suffix: ".md"
+  memory_file: ".claude/CLAUDE.md"
+  standing_authorization: true
+  runner_model: ""
+  hooks:
+    receipt_check: false

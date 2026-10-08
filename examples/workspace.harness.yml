@@ -1,0 +1,357 @@
+# Illustrative — not reverse-engineered from a real repo.
+# A polyglot monorepo: a Go API and a React web client, each its own hexagon,
+# joined by an OpenAPI contract the API owns. Shows the workspace form:
+# `project`, `plan`, `emit` at top level, everything else per package.
+#
+# Rendering reminder: agents become api-domain-builder, web-view-model-builder,
+# …; layers below are written WITHOUT the prefix. Globs are repo-root relative.
+# A change crossing both packages is two chains sequenced by the contract:
+# api updates openapi.yaml and ships, then web regenerates its client.
+harness_version: 2
+
+# Workspace top-level `project` carries name, kind and summary only; stack,
+# language and frameworks live per package.
+project:
+  name: fieldnotes
+  kind: fullstack
+  summary: Field-notes product — Go JSON API and React web client in one repo, contract-first via OpenAPI.
+
+plan:
+  depth: full
+  scout_name: feature-scout
+  impact_scout: false
+  spec: { enabled: false }
+
+# No top-level `skills`: invariant skills render once at the root, filled skills
+# once per package (api-architecture, web-architecture, …); per-package flags
+# live under packages[].skills.optional.
+
+emit:
+  cursor_compat: false
+  agent_suffix: ".md"
+  memory_file: "CLAUDE.md"
+  standing_authorization: true
+  runner_model: ""
+  hooks:
+    receipt_check: false
+
+workspace:
+  enabled: true
+  packages:
+    # ── Go API ───────────────────────────────────────────────────────────────
+    - name: api
+      path: services/api
+      prefix: api
+      project:
+        kind: service
+        stack: go
+        language: "Go 1.23"
+        frameworks: ["chi v5", "pgx v5"]
+        summary: JSON API for notes and projects, one hexagon per module under internal/.
+      commands:
+        run: go
+        add_dependency: "go get <module>@<version>"
+        gate:
+          - "go vet ./..."
+        gate_name: compile-guard
+        test_targeted: "go test -count=1 {package} -run '{filter}'"
+        test_target_hint: "run from services/api; {package} = ./internal/<module>/<layer>/..., {filter} = ^TestName$"
+        test_all: "go test -count=1 ./..."
+        lint: "golangci-lint run"
+        arch_test: ""
+        hygiene:
+          - "Run Go commands from services/api (its own go.mod)."
+          - "Never append 2>&1."
+          - "Always -count=1."
+      architecture:
+        shape: full
+        dependency_rule: "domain imports only the standard library; app declares the interfaces it consumes; adapters import app and domain; only cmd/api imports adapters."
+        hexagon:
+          domain_type:      { name: entity,                     path: "services/api/internal/<module>/domain/*.go" }
+          domain_error:     { name: "Err* sentinels + *ValidationError", path: "services/api/internal/<module>/domain/errors.go" }
+          driving_port:     { name: use-case struct,            path: "services/api/internal/<module>/app/*.go" }
+          driving_adapter:  { name: chi handler,                path: "services/api/internal/<module>/adapter/http/*.go" }
+          driven_port:      { name: consumer-side interface,    path: "services/api/internal/<module>/app/ports.go" }
+          driven_adapter:   { name: pgx repository,             path: "services/api/internal/<module>/adapter/postgres/*.go" }
+          # adapter/memory is a driven adapter cmd/api selects in fakes mode; doubles are test-only.
+          test_double:      { name: "Fake<Capability> (package <module>test)", path: "services/api/internal/<module>/<module>test/*.go" }
+          composition_root: { name: main,                       path: "services/api/cmd/api/main.go" }
+        exemplar_slice: "services/api/internal/note/"
+        leakage_examples: ["pgx.Rows", "pgconn.PgError", "*http.Request", "json tags on domain types"]
+        errors:
+          type: "(T, error) with sentinel + typed errors, errors.Is/As"
+          never_throw: true
+          discriminate_by: "errors.Is / errors.As"
+          classification:
+            - { source: "pgx.ErrNoRows", becomes: "domain.ErrNotFound", where: "services/api/internal/<module>/adapter/postgres/" }
+            - { source: "domain error (outbound)", becomes: "problem+json with the status and `code` declared in openapi.yaml", where: "services/api/internal/<module>/adapter/http/errors.go" }
+          traps: ["`err ==` on a sentinel", "%v instead of %w"]
+        validation:
+          library: "go-playground/validator v10"
+          placement: "http adapter validates request DTOs; domain constructors enforce invariants"
+        type_escape_hatches: ["any", "unchecked type assertion", "panic for expected failures", "_ = err"]
+        modules: { enabled: true, unit: "one package tree under internal/<module>" }
+      conformance: { level: greenfield, gaps: [] }
+      layers:
+        - agent: domain-builder
+          kind: domain
+          role: entities, constructors, errors
+          owns: ["services/api/internal/*/domain/**"]
+          rules: ["Standard library only; time and ids are parameters."]
+          owns_tests: true
+          depends_on: []
+          parallel_with: []
+          optional: false
+          skills: []
+        - agent: app-builder
+          kind: application
+          role: use cases and consumed interfaces
+          owns: ["services/api/internal/*/app/**"]
+          rules: ["Accept interfaces, return structs; never import an adapter package."]
+          owns_tests: true
+          depends_on: [domain-builder]
+          parallel_with: []
+          optional: false
+          skills: []
+        - agent: persistence-adapter
+          kind: driven-adapter
+          role: pgx repositories, in-memory adapters (fakes mode), test fakes
+          owns:
+            - "services/api/internal/*/adapter/postgres/**"
+            - "services/api/internal/*/adapter/memory/**"
+            - "services/api/internal/*/*test/**"     # test-only fakes package
+          rules:
+            - "Classify pgx errors into domain sentinels."
+            - "<module>test fakes are imported only from _test.go files; cmd/ never imports a *test package."
+          owns_tests: true
+          depends_on: [app-builder]
+          parallel_with: [http-adapter]
+          optional: false
+          skills: []
+        - agent: http-adapter
+          kind: driving-adapter
+          role: handlers, DTOs, error mapping — and the OpenAPI contract
+          owns:
+            - "services/api/internal/*/adapter/http/**"
+            - "services/api/openapi.yaml"
+          rules:
+            - "openapi.yaml changes first, handlers second; every response and error code is declared there."
+            - "A breaking contract change needs a version bump and a web chain after it."
+          owns_tests: true
+          depends_on: [app-builder]
+          parallel_with: [persistence-adapter]
+          optional: false
+          skills: []
+        - agent: wiring-agent
+          kind: wiring
+          role: main, config, router
+          owns: ["services/api/cmd/**", "services/api/go.mod"]
+          owns_tests: false
+          depends_on: [http-adapter, persistence-adapter]
+          parallel_with: []
+          optional: true
+          skills: []
+      verify:
+        layer_reviewer_checklist:
+          - "Driven ports declared in app/, never exported from an adapter package."
+          - "Handlers match openapi.yaml exactly — status codes, error codes, field names."
+        mechanical_checks:
+          - description: "no infrastructure import in domain or app"
+            command: "grep -rnE '\"(github.com/jackc/pgx|github.com/go-chi/chi|[^\"]*/adapter/)' services/api/internal/*/domain services/api/internal/*/app"
+            scope: repo
+            expect: empty
+        arch_tests:
+          # Candidate: generate, go-arch-lint, services/api/.go-arch-lint.yml.
+          status: none
+          tool: ""
+          path: ""
+          rules: []
+      testing:
+        placement: colocated
+        path_formula: "services/api/internal/<module>/<layer>/<file>_test.go"
+        runners:
+          - { name: go test, covers: [domain-builder, app-builder, persistence-adapter, http-adapter] }
+        doubles:
+          style: hand-written-fakes
+          location: "services/api/internal/*/*test/**"
+          rule: "Use cases run against <module>test fakes; adapter/memory is a driven adapter, not a double. No gomock."
+          typed_as_port: true
+        spy_technique: "a recording decorator implementing the port, delegating to the <module>test fake"
+        red_stub: "declare the func returning zero values"
+        tested_layers: [domain-builder, app-builder, persistence-adapter, http-adapter]
+        naming: technical
+      skills:
+        optional:
+          i18n: { enabled: false }
+          component_design: { enabled: false }
+          presentation_model: false
+          modules: true
+          spec_implement: false
+
+    # ── React web ────────────────────────────────────────────────────────────
+    - name: web
+      path: apps/web
+      prefix: web
+      project:
+        kind: web-app
+        stack: typescript
+        language: "TypeScript 5.7"
+        frameworks: ["React 19", "React Router 7", "TanStack Query", "neverthrow", "Vitest"]
+        summary: React client; talks to the API only through the generated OpenAPI client, wrapped in adapters.
+      commands:
+        run: pnpm --filter web
+        exec: pnpm dlx
+        add_dependency: "pnpm --filter web add"
+        gate:
+          - "pnpm --filter web typecheck"
+        gate_name: typecheck-guard
+        test_targeted: "pnpm --filter web exec vitest run {path}"
+        test_target_hint: "{path} = test file relative to apps/web (pnpm exec runs there), e.g. src/note/domain/note.test.ts"
+        test_all: "pnpm --filter web test"
+        lint: "pnpm --filter web lint"
+        arch_test: ""
+        hygiene:
+          - "pnpm only; never npm, npx or yarn."
+          - "Never append 2>&1."
+          - "Never edit apps/web/src/shared/api/generated/** — run `pnpm --filter web gen:api` after openapi.yaml changes."
+      architecture:
+        shape: full
+        dependency_rule: "domain/ depends on nothing; features/ depend on domain/ and ports/; adapters wrap the generated client; ui/ calls features; only src/app/providers.tsx knows adapters."
+        hexagon:
+          domain_type:      { name: entity type + rule functions, path: "apps/web/src/<domain>/domain/*.ts" }
+          domain_error:     { name: "<Domain>Error union (kind)",  path: "apps/web/src/<domain>/domain/<domain>.errors.ts" }
+          driving_port:     { name: use case,                      path: "apps/web/src/<domain>/features/<feature>/<feature>.ts" }
+          driving_adapter:  { name: component,                     path: "apps/web/src/ui/<feature>/*.tsx" }
+          driven_port:      { name: "<Capability> interface",      path: "apps/web/src/<domain>/ports/*.port.ts" }
+          driven_adapter:   { name: OpenAPI-client adapter,        path: "apps/web/src/<domain>/adapters/*.ts" }
+          test_double:      { name: "createFake<Capability>",      path: "apps/web/src/<domain>/tests/*.fake.ts" }
+          composition_root: { name: AppProviders,                  path: "apps/web/src/app/providers.tsx" }
+        exemplar_slice: "apps/web/src/note/"
+        leakage_examples: ["generated `components[\"schemas\"]` types", "openapi-fetch Response", "snake_case wire fields"]
+        errors:
+          type: "ResultAsync<T, <Domain>Error> (neverthrow)"
+          never_throw: true
+          discriminate_by: "kind field"
+          classification:
+            - { source: "problem+json `code` from the API", becomes: "<Domain>Error kind", where: "apps/web/src/<domain>/adapters/<domain>.mapper.ts" }
+            - { source: "fetch failure", becomes: "network", where: "apps/web/src/<domain>/adapters/<domain>.mapper.ts" }
+          traps: ["`.map(() => ok())` nests a Result", "switching on HTTP status outside adapters/"]
+        validation:
+          library: Zod
+          placement: "form schemas in features/ (input only); wire types come from the generated client, never re-declared"
+        type_escape_hatches: ["as", "any", "!"]
+        modules: { enabled: false }
+      conformance: { level: greenfield, gaps: [] }
+      layers:
+        - agent: domain-builder
+          kind: domain
+          role: entity types, rule functions, errors
+          owns: ["apps/web/src/*/domain/**"]
+          excludes: ["apps/web/src/shared/**", "apps/web/src/app/**", "apps/web/src/ui/**"]
+          rules: ["Imports nothing but neverthrow."]
+          owns_tests: true
+          depends_on: []
+          parallel_with: []
+          optional: false
+          skills: []
+        - agent: repository-builder
+          kind: driven-adapter
+          role: ports, adapters over the generated client, mappers, fakes
+          owns:
+            - "apps/web/src/*/ports/**"
+            - "apps/web/src/*/adapters/**"
+            - "apps/web/src/*/tests/**"
+            - "apps/web/src/shared/**"
+          excludes:
+            - "apps/web/src/shared/api/generated/**"   # produced by gen:api from the api package's contract
+            - "apps/web/src/app/**"                    # `*` matches app/ and ui/, owned by wiring and the UI layers
+            - "apps/web/src/ui/**"
+          rules: ["Generated types stop at the mapper; ports speak domain types."]
+          owns_tests: true           # mapper tests
+          depends_on: [domain-builder]
+          parallel_with: []
+          optional: false
+          skills: []
+        - agent: use-case-builder
+          kind: application
+          role: feature use cases and their tests
+          owns: ["apps/web/src/*/features/**"]
+          excludes: ["apps/web/src/shared/**", "apps/web/src/app/**", "apps/web/src/ui/**"]   # `*` matches shared/, app/, ui/
+          rules: ["Factory of one deps object of ports; no React, no fetch."]
+          owns_tests: true
+          depends_on: [repository-builder]
+          parallel_with: []
+          optional: false
+          skills: []
+        - agent: view-model-builder
+          kind: presentation
+          role: view-model hooks and tests
+          owns:
+            - "apps/web/src/ui/**/*.view-model.ts"
+            - "apps/web/src/ui/**/*.view-model.test.tsx"
+          rules: ["Use cases via context; map error.kind to a message key."]
+          owns_tests: true
+          depends_on: [use-case-builder]
+          parallel_with: []
+          optional: false
+          skills: []
+        - agent: component-builder
+          kind: driving-adapter
+          role: components
+          owns: ["apps/web/src/ui/**/*.tsx"]
+          excludes: ["apps/web/src/ui/**/*.view-model.test.tsx"]
+          rules: ["Render what the view-model returns; no logic hooks."]
+          owns_tests: false
+          depends_on: [view-model-builder]
+          parallel_with: []
+          optional: false
+          skills: []
+        - agent: wiring-agent
+          kind: wiring
+          role: providers, router, entry
+          owns: ["apps/web/src/app/**", "apps/web/src/main.tsx", "apps/web/package.json"]
+          owns_tests: false
+          depends_on: [view-model-builder, component-builder]
+          parallel_with: []
+          optional: true
+          skills: []
+      verify:
+        layer_reviewer_checklist:
+          - "No import from shared/api/generated outside adapters/."
+          - "No fetch or HTTP status check outside adapters/."
+        mechanical_checks:
+          - description: "generated client used only in adapters"
+            command: "grep -rln 'shared/api/generated' apps/web/src | grep -v -e '/adapters/' -e '/shared/api/'"
+            scope: repo
+            expect: empty
+        arch_tests:
+          # Candidate: generate, dependency-cruiser, apps/web/.dependency-cruiser.cjs.
+          status: none
+          tool: ""
+          path: ""
+          rules: []
+      testing:
+        placement: colocated
+        path_formula: "apps/web/src/<domain>/<layer>/<file>.test.ts, apps/web/src/ui/<feature>/<feature>.view-model.test.tsx"
+        runners:
+          - { name: vitest, covers: [domain-builder, repository-builder, use-case-builder, view-model-builder] }
+        doubles:
+          style: hand-written-fakes
+          location: "apps/web/src/*/tests/*.fake.ts"
+          rule: "Fakes typed as the port; no msw for unit tests."
+          typed_as_port: true
+        spy_technique: "vi.spyOn on the real use case without a mock implementation"
+        red_stub: "export the function with its final signature returning errAsync({ kind: \"unexpected\" })"
+        tested_layers: [domain-builder, repository-builder, use-case-builder, view-model-builder]
+        naming: user-facing
+      skills:
+        optional:
+          i18n: { enabled: false }
+          component_design: { enabled: true, preview: none, platform: web }
+          presentation_model: true
+          modules: false
+          spec_implement: false
+
+  contracts:
+    - { what: "OpenAPI spec", path: "services/api/openapi.yaml", owner: api }
+    - { what: "generated TS client (derived, never hand-edited)", path: "apps/web/src/shared/api/generated/**", owner: api }

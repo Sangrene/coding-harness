@@ -1,0 +1,103 @@
+---
+name: {{PRESENTATION_SKILL}}
+description: "The {{PRESENTATION_NAME}} pattern in {{PROJECT_NAME}} — the presentation model between UI components and use cases. Use when creating or editing a {{PRESENTATION_NAME}} (`{{PRESENTATION_PATH}}`), connecting a screen to use cases, managing loading, error and dialog state for a view, mapping domain errors to user messages, wiring a form to its validation, or when a component starts to hold logic. A {{PRESENTATION_NAME}} is a driving adapter: it calls use cases, reads state read-only, and never holds a business rule or writes state directly."
+---
+
+<!-- harness: emitted when skills.optional.presentation_model is true. Fill
+     PRESENTATION_NAME (what the repo calls it: view-model, presenter, view
+     controller), PRESENTATION_PATH (path formula of its file),
+     PRESENTATION_ACCESS (how it reaches use cases and read-only state — a
+     context, an injected facade, constructor arguments) from the repo's real
+     code. FORM_BINDING_RULE: the repo's form library and how it binds the use
+     case's input schema, or drop the "Forms" section when there are no forms.
+     PRESENTATION_PLATFORM_RULES: the stack pack's rules for presentation
+     models on skills.optional.component_design.platform, one bullet each with
+     real names (e.g. react-native: the router hook, search-params hook and
+     link component are allowed here; native globals such as app-state,
+     linking or alert are reached through a port or the context, never
+     imported directly). Empty: drop the "Platform rules" section.
+     Drop every I18N_SKILL / COMPONENT_SKILL mention when that skill is not
+     enabled. Strip every harness comment at render. -->
+
+# {{PRESENTATION_NAME}}
+
+A {{PRESENTATION_NAME}} turns user intent into use-case calls, and use-case
+results and state into something a component can render. **UI logic only.**
+See `hexagonal-architecture` (driving adapters are thin) and
+`separation-of-concerns` (which side a piece of logic goes on).
+
+## What belongs here — and what does not
+
+| Belongs in the {{PRESENTATION_NAME}} | Does not → where it goes |
+|---|---|
+| Calling a use case in response to a user action | A rule about an entity ("only editable once analysed", "deleting the last item deletes the parent") → the domain |
+| Form setup, defaults, submit, reset | Any state setter call → a use case that performs the mutation |
+| Mapping an error **kind** to a message | Comparing an error's message text → match its kind |
+| Local, transient UI flags (dialog open, a spinner for a one-off action) | Operation status other screens share → written to state by the use case |
+| Deriving display data (grouping, sorting for display, formatting) | Business constants and the counts they gate → a domain function the use case exposes |
+| Timing wiring (debounce, auto-save trigger) that calls a use case | The policy behind it (queueing, skip no-op, "blocked unless X") → a use case, with a scheduler port |
+| Navigation — the router and link API — which is UI plumbing | Navigation inside a use case → the use case returns an outcome; the {{PRESENTATION_NAME}} navigates on it |
+| Calling a port the UI legitimately owns (analytics) | Importing an adapter, a repository, an HTTP client, a platform global |
+
+About to write an `if` that decides what is *allowed*? That is a business rule.
+Put it in the domain, have the use case call it, and read the answer here.
+
+## Access
+
+{{PRESENTATION_ACCESS}}
+
+- Read state to render. **Never** call a state setter — every mutation is a use
+  case, even a "trivial" local edit, or the rule it implies has no test and no
+  owner.
+- If what you need is not offered, the use case is missing a method. Report
+  `STATUS: blocked` naming it; do not reach around it.
+
+## Navigation is UI plumbing
+
+The router and link API may be used in a {{PRESENTATION_NAME}}, never in a use
+case or the domain. A use case that needs "go to X afterwards" returns the
+outcome; the {{PRESENTATION_NAME}} decides the route. Route files stay thin:
+they render a screen and hold no logic.
+
+## Platform rules
+
+{{PRESENTATION_PLATFORM_RULES}}
+
+## Errors
+
+Handle every result explicitly, both branches. Map the failure **by kind** to a
+user-facing message (`{{ERRORS_SKILL}}`, `{{I18N_SKILL}}`). Never show raw
+error text, never branch on it, never import an infrastructure error type.
+
+## Forms
+
+{{FORM_BINDING_RULE}}
+
+The form's input type is **the use case's input type**, imported from where the
+use case declares it — never redeclared locally, and never a response shape.
+
+## Components hold no logic
+
+If a component needs state, an effect or application access, it gets a
+{{PRESENTATION_NAME}} (`{{COMPONENT_SKILL}}`). That includes the initial load.
+
+## Testing
+
+Every {{PRESENTATION_NAME}} has a test beside it (`{{TESTING_SKILL}}` → "Testing
+driving adapters"). Real use cases over fake ports; observe calls with
+{{SPY_TECHNIQUE}}. Assert *when and with what* use cases are called, when they
+are not, and what is exposed for each outcome. Never re-assert the use case's
+effects.
+
+## Size
+
+Around 150 lines is the signal to decompose: extract one private helper per
+concern with `extract-til-you-drop`. First check whether the bulk is a business
+rule that belongs in the domain. It usually is.
+
+## Checklist before reporting
+
+- [ ] No rule, no state setter, no adapter import, no platform global.
+- [ ] Every result handled; errors mapped by kind.
+- [ ] Form bound to the use case's own input type.
+- [ ] Test beside it, red then green, asserting calls and exposure only.

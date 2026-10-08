@@ -1,0 +1,135 @@
+<!-- harness: renders to emit.memory_file. `@` imports and links resolve
+     relative to this file, so {{SKILLS_IMPORT_PREFIX}} is `.claude/skills/`
+     for a root CLAUDE.md and `skills/` for .claude/CLAUDE.md. A section marked
+     "drop when" is removed whole, heading included. Strip every harness comment
+     at render. -->
+# {{PROJECT_NAME}}
+
+{{PROJECT_SUMMARY}}
+
+<!-- harness: {{REPO_IMPORTS}} renders one `@<relative path>` line per repo
+     instruction file this memory file imports (e.g. `@AGENTS.md`, or
+     `@../AGENTS.md` from .claude/CLAUDE.md) — when the file exists and is
+     not itself the memory file. Empty otherwise; drop the blank line. -->
+{{REPO_IMPORTS}}
+
+This project is **hexagonal (ports & adapters) with clean layering**, and every
+change is **test-driven** (red → green → refactor). Neither is optional.
+
+<!-- harness: drop the next paragraph when conformance.level is conforming. -->
+Existing code does not all conform yet ({{CONFORMANCE_LEVEL}}). New code follows
+the skills below, never the deviating code next to it. The known deviations are
+listed in `{{ARCH_SKILL}}`{{MIGRATION_DOC_CLAUSE}}.
+
+<!-- harness: the gate renders from GATE_STEPS — the real steps, arch test
+     included when commands.arch_test is set. Never write "once it exists",
+     "when added" or similar: a step is listed because it runs today, or it
+     is absent. COMMAND_RULES carries every other command and the hygiene
+     rules, and does not restate the gate. -->
+## Commands
+
+Gate, in order, all must pass (run by `verify/{{GATE_AGENT}}` after every
+implement round):
+
+{{GATE_STEPS}}
+
+{{COMMAND_RULES}}
+
+<!-- harness: drop this section when carry_forward is empty. Quote, don't
+     paraphrase. Rules already loaded through {{REPO_IMPORTS}} (e.g. an
+     @-imported AGENTS.md) are NOT listed again here, and neither is a rule
+     COMMAND_RULES already states — CARRY_FORWARD holds only rules from files
+     this memory file does not import. -->
+## Project rules
+
+{{CARRY_FORWARD}}
+
+<!-- harness: drop this section when dev_run is empty. -->
+## Running locally
+
+{{DEV_RUN}}
+
+## Skills
+
+Always on, every task, no exceptions — imported so they load with this file:
+
+<!-- harness: {{ALWAYS_ON_IMPORTS}} renders one
+     `@{{SKILLS_IMPORT_PREFIX}}<skill>/SKILL.md` line each, in this order:
+     hexagonal-architecture, tdd, separation-of-concerns, extract-til-you-drop,
+     {{ARCH_SKILL}}, then every emit.always_on_skills entry by its rendered
+     name. Workspace mode: omit {{ARCH_SKILL}} and per-package skills; each
+     package's CLAUDE.md imports its own. -->
+{{ALWAYS_ON_IMPORTS}}
+
+- `hexagonal-architecture` — dependencies point inward; the domain references
+  no framework; adapters translate and classify; adapters are constructed only
+  at the composition root. **This is fixed, not a preference.**
+- `tdd` — write the failing test first, **watch it fail** for the expected
+  reason (it compiles, runs and fails), then write the minimum code to pass.
+  Every behaviour change and every bug fix, however small.
+- `separation-of-concerns` — which layer owns a piece of logic, and why.
+- `extract-til-you-drop` — decompose every function until no further
+  intention-revealing extraction remains. New code, not just refactors.
+
+Project-specific, loaded by the agents that need them (always-on ones above are
+not repeated):
+
+{{SKILL_INDEX}}
+
+<!-- harness: drop this section when workspace.enabled is false. -->
+## Workspace
+
+{{WORKSPACE_SECTION}}
+
+## Orchestrator
+
+Main agent acts as **orchestrator** for multi-layer hexagonal work (a new
+feature, a new {{DOMAIN_WORD}}, a migration, or any change spanning
+{{LAYER_CHAIN_PROSE}}). Delegate to the phase-scoped subagents below and store
+receipts only.
+
+Full contract: [orchestrator]({{SKILLS_IMPORT_PREFIX}}orchestrator/SKILL.md) ·
+[receipt.md]({{SKILLS_IMPORT_PREFIX}}orchestrator/receipt.md) ·
+[parallel.md]({{SKILLS_IMPORT_PREFIX}}orchestrator/parallel.md)
+
+<!-- harness: drop the next paragraph when emit.standing_authorization is false. -->
+**Standing authorization:** the orchestrator may spawn the agents below,
+following the workflow, without asking first. This does not cover pushes, pull
+requests, which still need the user's confirmation.
+
+<!-- harness: this file is the canonical home of the touch-area table, the
+     file caps and (with parallel.md, the dispatch authority) the workflow
+     graph. Every other skill and agent references them here; none copies
+     them. Workspace mode — drop "Workflow" and "Touch area → agent"; they
+     render per package from PACKAGE-CLAUDE.md.tmpl. -->
+### Workflow
+
+```text
+{{GRAPH}}
+```
+
+{{GREEN_GATE_SENTENCE}} Every test-owning builder reports red **then** green.
+
+### Touch area → agent
+
+| Touch area | Agent |
+|---|---|
+| Scope, rules, audit, gaps in scope | `plan/{{SCOUT}}` |
+{{DISPATCH_TABLE}}
+| Gate ({{GATE}}) after any implement round | `verify/{{GATE_AGENT}}` |
+| Targeted tests after the gate | `verify/{{TEST_RUNNER}}` |
+| Boundary review of the diff after the gate | `verify/{{LAYER_REVIEWER}}` |
+
+### Rules that survive every refactor
+
+- Dispatch means an Agent tool call. Doing a subagent's work inline is not
+  dispatch.
+- Never advance the chain on a receipt that isn't `STATUS: done`.
+- Post a one-line dispatch note before each agent and its receipt after — a
+  subagent's output is invisible to the user otherwise.
+- Never give a verify agent a verdict; give it scope.
+- Each implement agent edits at most its file cap per invocation
+  ({{FILE_CAPS}}).
+- There is no meta-orchestrator subagent. The root walks the graph itself.
+
+{{EXTRA_SECTIONS}}

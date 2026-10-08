@@ -1,0 +1,235 @@
+# Illustrative — not reverse-engineered from a real repo.
+# A Go HTTP service laid out module-first: internal/<module>/{domain,app,adapter}.
+# Shows the Go idioms the stack pack supplies: consumer-side interfaces as
+# driven ports, (T, error) with sentinels + typed errors, go vet as the gate
+# (it compiles _test.go; go build does not), -count=1 so results are never
+# cached, and tests colocated in the package they test.
+harness_version: 2
+
+project:
+  name: notes-api
+  kind: service
+  stack: go
+  language: "Go 1.23"
+  frameworks: ["chi v5", "pgx v5", "sqlc"]
+  summary: JSON HTTP API for notes and projects, Postgres via pgx, one hexagon per module under internal/.
+
+commands:
+  run: go
+  exec: ""
+  add_dependency: "go get <module>@<version>"
+  gate:
+    - "go vet ./..."
+  gate_name: compile-guard
+  test_targeted: "go test -count=1 {package} -run '{filter}'"
+  test_target_hint: "{package} = the package dir with /... (./internal/note/app/...), {filter} = ^TestName$ or ^TestName$/subtest"
+  test_all: "go test -count=1 ./..."
+  lint: "golangci-lint run"
+  arch_test: "go-arch-lint check"
+  hygiene:
+    - "Never append 2>&1 — it swallows output and makes debugging impossible."
+    - "Always -count=1: a cached `ok` is not a green run."
+    - "Never edit internal/*/adapter/postgres/sqlc/** — run `sqlc generate` after changing queries.sql."
+
+dev_run:
+  command: "go run ./cmd/api"
+  fakes_flag: "NOTES_STORE=memory"
+  notes:
+    - "Postgres mode needs DATABASE_URL; take it from your local env, never from a committed file."
+
+architecture:
+  shape: full
+  dependency_rule: "domain imports only the standard library; app imports domain and declares the interfaces it consumes; adapters import app and domain; only cmd/api imports adapters."
+  hexagon:
+    domain_type:      { name: entity / value type,      path: "internal/<module>/domain/<entity>.go" }
+    domain_error:     { name: "Err* sentinels + *ValidationError", path: "internal/<module>/domain/errors.go" }
+    driving_port:     { name: "use-case struct (Service)", path: "internal/<module>/app/<usecase>.go" }
+    driving_adapter:  { name: chi handler,              path: "internal/<module>/adapter/http/<resource>_handler.go" }
+    # Go interfaces belong to the consumer: the use case declares what it needs.
+    driven_port:      { name: consumer-side interface,  path: "internal/<module>/app/ports.go" }
+    driven_adapter:   { name: pgx repository,           path: "internal/<module>/adapter/postgres/<entity>_repo.go" }
+    # adapter/memory is a driven adapter main selects in fakes mode (NOTES_STORE=memory);
+    # the test doubles are a separate test-only package per module.
+    test_double:      { name: "Fake<Capability> (package <module>test)", path: "internal/<module>/<module>test/fake_<capability>.go" }
+    composition_root: { name: main,                     path: "cmd/api/main.go" }
+  exemplar_slice: "internal/note/"
+  leakage_examples: ["pgx.Row / pgx.Rows", "pgconn.PgError", "sqlc-generated types (internal/*/adapter/postgres/sqlc)", "*http.Request", "json struct tags on domain types"]
+
+  errors:
+    type: "(T, error) with sentinel + typed errors, errors.Is/As"
+    never_throw: true            # no panic for expected failures
+    discriminate_by: "errors.Is on Err* sentinels; errors.As for *ValidationError"
+    classification:
+      - { source: "pgx.ErrNoRows", becomes: "domain.ErrNotFound", where: "internal/<module>/adapter/postgres/" }
+      - { source: "pgconn.PgError code 23505", becomes: "domain.ErrConflict", where: "internal/<module>/adapter/postgres/" }
+      - { source: "invariant broken in a constructor", becomes: "*domain.ValidationError{Field, Reason}", where: "internal/<module>/domain/" }
+      - { source: "domain error (outbound)", becomes: "404 / 409 / 422 problem+json", where: "internal/<module>/adapter/http/errors.go" }
+    traps:
+      - "`err == domain.ErrNotFound` instead of errors.Is breaks once anyone wraps"
+      - "`fmt.Errorf(\"...: %v\", err)` drops the chain; wrap with %w"
+      - "returning a nil *ValidationError as `error` yields a non-nil interface"
+      - "`_ = repo.Save(ctx, n)` discards the failure"
+
+  validation:
+    library: "go-playground/validator v10"
+    placement: "http adapter validates request shape with struct tags on its own DTOs; domain constructors (NewNote) enforce invariants and return *ValidationError"
+
+  type_escape_hatches: ["any / interface{}", "unchecked type assertion x.(T)", "panic for expected failures", "ignored error (_ =)"]
+  modules:
+    enabled: true
+    unit: "one Go package tree under internal/<module>; modules talk through each other's app package, never domain or adapter"
+
+conformance:
+  level: greenfield
+  gaps: []
+
+layers:
+  - agent: domain-builder
+    kind: domain
+    role: entities, value types, constructors with invariants, sentinel and typed errors
+    owns: ["internal/*/domain/**"]   # *_test.go sits beside the code — same owner, no exclude needed
+    rules:
+      - "Standard library only. No pgx, chi, validator, encoding/json tags."
+      - "Constructors return (T, error); zero values are never valid entities."
+      - "Time and ids are parameters (now time.Time, id ID), never time.Now() or uuid.New()."
+    reference: "internal/note/domain/note.go"
+    owns_tests: true
+    depends_on: []
+    parallel_with: []
+    optional: false
+    skills: [modular-monolith]
+
+  - agent: app-builder
+    kind: application
+    role: use cases and the interfaces they consume
+    owns: ["internal/*/app/**"]
+    rules:
+      - "Declare driven ports in app/ports.go as small interfaces named for the capability (NoteStore, Clock)."
+      - "Accept interfaces, return structs. A use case never imports an adapter package."
+      - "Wrap with %w and context; never translate a domain sentinel into a string."
+    reference: "internal/note/app/create_note.go"
+    owns_tests: true
+    depends_on: [domain-builder]
+    parallel_with: []
+    optional: false
+    skills: [modular-monolith]
+
+  - agent: persistence-adapter
+    kind: driven-adapter
+    role: pgx repositories, sqlc queries, in-memory adapters (fakes mode), test fakes
+    owns:
+      - "internal/*/adapter/postgres/**"
+      - "internal/*/adapter/memory/**"
+      - "internal/*/*test/**"                   # test-only fakes package (notetest, projecttest)
+    excludes:
+      - "internal/*/adapter/postgres/sqlc/**"   # generated by `sqlc generate`; no agent edits it
+    rules:
+      - "Implement the app/ports.go interface; assert it with `var _ app.NoteStore = (*Repo)(nil)`."
+      - "Classify pgx errors into domain sentinels; never return a pgx or pgconn error."
+      - "The memory adapter passes the same table-driven contract tests as the pgx repo (shared helper in adapter/memory/contract.go)."
+      - "<module>test fakes are imported only from _test.go files; cmd/ never imports a *test package."
+    reference: "internal/note/adapter/postgres/note_repo.go"
+    owns_tests: true
+    depends_on: [app-builder]
+    parallel_with: [http-adapter]
+    optional: false
+    skills: []
+
+  - agent: http-adapter
+    kind: driving-adapter
+    role: chi handlers, request/response DTOs, error → status mapping
+    owns: ["internal/*/adapter/http/**"]
+    rules:
+      - "Decode, validate the DTO, call one use case, encode. No business logic."
+      - "Map errors with errors.Is/As in adapter/http/errors.go only."
+    reference: "internal/note/adapter/http/note_handler.go"
+    owns_tests: true             # httptest against the real use case over <module>test fakes
+    depends_on: [app-builder]
+    parallel_with: [persistence-adapter]
+    optional: false
+    skills: []
+
+  - agent: wiring-agent
+    kind: wiring
+    role: main, config, router assembly
+    owns:
+      - "cmd/**"
+      - "internal/platform/**"
+      - "go.mod"
+      - ".go-arch-lint.yml"
+    rules:
+      - "main constructs adapters and injects them; memory vs postgres by NOTES_STORE. No other decision."
+    owns_tests: false
+    depends_on: [http-adapter, persistence-adapter]
+    parallel_with: []
+    optional: true
+    skills: []
+
+plan:
+  depth: full
+  scout_name: feature-scout
+  impact_scout: false
+  spec: { enabled: false }
+
+verify:
+  layer_reviewer_checklist:
+    - "Driven port interfaces are declared in app/ (or domain/), never exported from the adapter package."
+    - "No adapter, pgx or chi import in domain/ or app/."
+    - "Every error crossing a layer is wrapped with %w or classified, never stringified."
+    - "Handlers call exactly one use case and hold no branching on business state."
+  mechanical_checks:
+    - description: "no infrastructure import in domain or app"
+      command: "grep -rnE '\"(github.com/jackc/pgx|github.com/go-chi/chi|[^\"]*/adapter/)' internal/*/domain internal/*/app"
+      scope: repo
+      expect: empty
+    - description: "no time.Now / uuid.New in domain"
+      command: "grep -rnE 'time\\.Now\\(\\)|uuid\\.New' internal/*/domain --include='*.go' | grep -v '_test.go'"
+      scope: diff
+      expect: empty
+    - description: "sentinel compared with =="
+      command: "grep -rnE 'err (==|!=) [a-z]+\\.Err[A-Z]' internal cmd --include='*.go'"
+      scope: diff
+      expect: empty
+  arch_tests:
+    status: generate
+    tool: go-arch-lint
+    path: ".go-arch-lint.yml"
+    rules:
+      - "domain may depend on nothing but the standard library"
+      - "app may depend on domain only"
+      - "adapter/* may depend on app and domain, never on another module's adapter"
+      - "only cmd/api may depend on adapter/*"
+
+testing:
+  placement: colocated
+  path_formula: "internal/<module>/<layer>/<file>_test.go"
+  runners:
+    - { name: go test, covers: [domain-builder, app-builder, persistence-adapter, http-adapter] }
+  doubles:
+    style: hand-written-fakes
+    location: "internal/*/*test/**"
+    rule: "Use cases are tested against hand-written fakes from the <module>test package; adapter/memory is a driven adapter, not a double. No mocking framework (no gomock, no testify/mock)."
+    typed_as_port: true          # var store app.NoteStore = notetest.NewFakeNoteStore()
+  spy_technique: "a recording decorator that implements the port, appends each call to a slice, then delegates to the <module>test fake"
+  red_stub: "declare the func with its final signature returning zero values (`return Note{}, nil`) — it compiles, the test fails on its assertion"
+  tested_layers: [domain-builder, app-builder, persistence-adapter, http-adapter]
+  naming: technical
+
+skills:
+  invariant: [hexagonal-architecture, tdd, separation-of-concerns, extract-til-you-drop, orchestrator]
+  filled: [architecture, testing, error-handling]
+  optional:
+    i18n: { enabled: false }
+    component_design: { enabled: false }
+    presentation_model: false
+    modules: true
+    spec_implement: false
+
+emit:
+  cursor_compat: false
+  agent_suffix: ".md"
+  memory_file: "CLAUDE.md"
+  standing_authorization: true
+  runner_model: ""
+  hooks:
+    receipt_check: false

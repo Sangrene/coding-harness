@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "SubagentStop": [
+      {
+        "matcher": "{{HARNESS_AGENTS_REGEX}}",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/receipt-check.sh --tdd {{TDD_AGENTS}}"
+          }
+        ]
+      }
+    ]
+  }
+}

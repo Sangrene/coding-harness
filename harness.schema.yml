@@ -1,0 +1,383 @@
+# harness.yml — the single source of truth for a generated harness.
+# Written by harness-init after detection, confirmed by the user, then committed
+# to the target repo at .claude/harness.yml so harness-upgrade can re-render it.
+#
+# This file is the schema, annotated. See examples/ for filled instances.
+#
+# Two shapes of manifest:
+#   - single package: every section below at top level.
+#   - workspace (monorepo / polyglot): `project`, `plan`, `emit` at top level,
+#     and one `packages[]` entry per package carrying its own `commands`,
+#     `architecture`, `conformance`, `layers`, `verify`, `testing`. See the
+#     `workspace` section at the bottom.
+
+harness_version: 2
+
+project:
+  name: <repo name>
+  # What the codebase is. Drives `architecture.shape` defaults and which roles
+  # may be absent-by-shape. `infra` (Terraform, Helm, Pulumi-only repos) is not
+  # supported: harness-init stops and says why — the hexagon governs application
+  # code, not resource declarations.
+  kind: service | web-app | mobile-app | cli | worker | library | fullstack
+  # Stack pack id. Must match a file in stacks/ (typescript, rust, go, dotnet,
+  # python, jvm). The pack supplies detection signals, command idioms, error
+  # idioms, the red-phase stub rule and the arch-test tool. A language with no
+  # pack is still installable: harness-init fills the same fields by hand and
+  # says so at the confirm step.
+  stack: typescript | rust | go | dotnet | python | jvm | <other>
+  language: <exact language, e.g. "C# 13", "Go 1.23", "TypeScript 5.7">
+  frameworks: [<e.g. "ASP.NET Core", "Echo", "React Router", "Expo", "Axum">]
+  # One line the orchestrator can use to describe the codebase in dispatch prompts.
+  summary: <what this codebase is>
+
+commands:
+  # Script runner prefix. Every emitted script command uses it verbatim.
+  run: <yarn | bun run | pnpm | cargo | go | dotnet | uv run | ./gradlew>
+  # Package-binary executor, when distinct from `run` (bunx, pnpm dlx, uvx).
+  # Empty when the stack has none. Never npx when the repo pins another manager.
+  exec: <optional>
+  # How to add a dependency. Some stacks wrap the native command
+  # (`bunx expo install`, `dotnet add <proj> package`, `go get`).
+  add_dependency: <optional>
+  # Sequential blocking gate after the implement chain: the fastest TOTAL
+  # correctness check, run in order, all must pass. Must compile test code too
+  # (`go build ./...` does not; `go vet ./...` does).
+  gate:
+    - <e.g. "yarn typecheck" | "cargo check --all-targets" | "go vet ./..." |
+       "dotnet build --no-restore -warnaserror">
+  gate_name: <typecheck-guard | compile-guard | build-guard>
+  # Targeted test invocation. MUST be non-interactive and MUST NOT serve cached
+  # results (`go test -count=1`). Use exactly one target token:
+  #   {path}    a test file            (jest, vitest, pytest)
+  #   {package} a package / directory  (go: ./internal/note/...)
+  #   {project} a test project         (dotnet: tests/Note.Tests)
+  #   {filter}  a name filter          (cargo test, dotnet --filter, go -run)
+  # Two tokens are allowed when the runner needs both (go: {package} + {filter}).
+  test_targeted: <e.g. "go test -count=1 {package} -run '{filter}'">
+  # One sentence telling an agent what to substitute for the token(s).
+  test_target_hint: <e.g. "{package} = the package dir with /..., {filter} = ^TestName$">
+  test_all: <e.g. "go test -count=1 ./...">
+  lint: <optional>
+  # Boundary tests (see verify.arch_tests). Empty when none. Run by the gate agent.
+  arch_test: <optional, e.g. "dotnet test tests/Architecture.Tests">
+  # Hygiene rules restated in the memory file. Keep the 2>&1 rule unless the repo
+  # genuinely needs merged streams.
+  hygiene:
+    - "Never append 2>&1 — it swallows output and makes debugging impossible."
+    - "<pm>-only: never npx/npm/yarn if the repo pins a different one."
+    - "<anything slow>: wait for exit, runs can exceed a minute."
+
+# Rules already written for agents elsewhere in the repo (AGENTS.md,
+# .cursor/rules, copilot-instructions, README dev notes) that must survive.
+# Rendered into the memory file under "Project rules". Quote, don't paraphrase.
+carry_forward:
+  - <e.g. "Expo APIs change every SDK — read the versioned docs, never memory">
+
+# How to run the app locally, when relevant to agents (fakes mode, seeded logins).
+# Never put real credentials here — only the seeded fake-mode ones the repo
+# already documents.
+dev_run:
+  command: <optional>
+  fakes_flag: <optional, e.g. "EXPO_PUBLIC_IN_MEMORY_REPOSITORIES=true">
+  notes: [<optional>]
+
+architecture:
+  # NOT A CHOICE. Every harness is hexagonal (ports & adapters) with clean
+  # layering. `hexagonal-architecture` is emitted verbatim in every project.
+  # What varies is the naming below, and the shape.
+
+  # How much of the hexagon this kind of project needs. Scaling never weakens
+  # a rule; it only declares which roles legitimately do not exist.
+  #   full    — all eight roles. Default for service, web-app, mobile-app,
+  #             worker, fullstack.
+  #   minimal — domain + driven ports/adapters + one driving adapter + root.
+  #             Default for cli and small workers. Use cases may live as plain
+  #             functions beside the domain; the driving port is still explicit.
+  #   library — the public API IS the driving port; there is no driving adapter
+  #             and no composition root (the consumer is the root). Driven ports
+  #             are injected by the consumer.
+  shape: full | minimal | library
+
+  # The dependency rule restated in the repo's own vocabulary. One sentence.
+  # Must be a specialisation of "dependencies point inward", never a weakening.
+  dependency_rule: <e.g. "domain depends on nothing; adapters depend on ports">
+
+  # REQUIRED. Maps each hexagon role to this repo's name and path. Every role
+  # must be filled, marked `absent: by-shape` (only roles the shape removes), or
+  # recorded under `conformance.gaps`. Never blank.
+  hexagon:
+    domain_type:      { name: <local name>, path: <glob> }
+    domain_error:     { name: ..., path: ... }
+    driving_port:     { name: ..., path: ... }   # the use case the app offers
+    driving_adapter:  { name: ..., path: ... }   # handler / component / CLI / consumer
+    driven_port:      { name: ..., path: ... }   # capability the app requires
+    driven_adapter:   { name: ..., path: ... }   # concrete implementation
+    test_double:      { name: ..., path: ... }
+    composition_root: { name: ..., path: ... }
+    # e.g. for shape: library →  driving_adapter: { absent: by-shape }
+  # Exemplar slice the architecture skill points agents at. Must be a real,
+  # complete, conforming feature in the target repo.
+  exemplar_slice: <path>
+  # What must not appear past the driven adapter, named concretely.
+  leakage_examples: [<e.g. "__typename", "sqlx::Row", "*sql.Rows", "DbContext", "[JsonPropertyName]">]
+
+  # Typed-error convention. Drives the error-handling skill.
+  errors:
+    # The failure representation inner layers return.
+    type: <e.g. "ResultAsync<T, E> (neverthrow)" | "Result<T, DomainError>" |
+           "(T, error) with sentinel + typed errors, errors.Is/As" |
+           "ErrorOr<T>" | "exceptions (DomainException hierarchy)">
+    # true = inner layers never throw/panic for expected failures.
+    never_throw: true | false
+    # How a caller tells failures apart: discriminant field, enum variant,
+    # errors.Is on a sentinel, exception subtype.
+    discriminate_by: <e.g. "kind field" | "enum variant" | "errors.Is / errors.As">
+    # Where each class of failure becomes a domain error. Rendered as a table.
+    classification:
+      - { source: <e.g. "HTTP 404">, becomes: <e.g. "NotFound">, where: <adapter path> }
+    # Library-specific traps the reviewer greps for.
+    traps: [<e.g. "`.map(() => ok())` nests a Result">]
+
+  # Where input validation runs, and with what. Placement is a boundary rule.
+  validation:
+    library: <e.g. "ArkType" | "FluentValidation" | "go-playground/validator" | "none">
+    placement: <e.g. "driving adapter parses; domain constructors enforce invariants">
+
+  # Language escape hatches the reviewer flags in inner layers.
+  # TS: `as`, `any`, `!`; C#: `!`, `dynamic`, unchecked casts;
+  # Go: `any`, unchecked type assertions; Rust: `unwrap()`, `expect()` outside tests.
+  type_escape_hatches: [<...>]
+
+  # Optional: module boundaries above the hexagon (one hexagon per module).
+  modules:
+    enabled: true | false
+    unit: <e.g. "one library crate per business module + shared kernel" |
+           "one .csproj per module" | "one Go package tree under internal/<module>">
+
+# How far the codebase currently is from the enforced architecture. Detection
+# fills this; the user confirms it. It never softens the rules — it scopes the
+# migration and populates the architecture skill's "Known deviations" section,
+# and each affected layer's "Do not copy" list.
+conformance:
+  level: conforming | partial | greenfield | non-conforming
+  # Optional pointer to a longer migration document in the repo.
+  migration_doc: <optional path>
+  gaps:
+    - role_or_rule: <e.g. "driven_port" | "translation boundary">
+      finding: <what the code does instead>
+      paths: [<glob>]
+      # enforce-now = new code must comply immediately (default)
+      # migrate     = tracked, fixed when the file is touched
+      disposition: enforce-now | migrate
+      # Layer agents whose "Do not copy" list names these paths.
+      layers: [<agent names>]
+
+# THE CORE OF THE MANIFEST.
+# One entry per implement agent, in dependency order. Each becomes
+# .claude/agents/implement/<agent>.md rendered from
+# templates/agents/implement/_layer-builder.md.tmpl, and one row of the
+# touch-area dispatch table in the memory file.
+#
+# Required: exactly one layer of `kind: domain`, first in the chain. It owns the
+# types, the rule functions and the domain error. "Rules go to the domain
+# builder first" depends on it existing.
+layers:
+  - agent: <kebab-case agent name, e.g. domain-builder>
+    # Hexagon role this layer plays. Selects the kind-specific rule pack in
+    # templates/agents/implement/rule-packs.md.
+    #   driving-adapter = receives outside input: HTTP handler, CLI, consumer.
+    #   presentation    = view-model / presenter: UI state, calls use cases.
+    #   view            = humble UI component: renders props from a
+    #                     presentation model, owns no state or decisions.
+    #   A frontend's component layer is `view`, never `presentation`.
+    kind: domain | application | driven-adapter | driving-adapter | state |
+          presentation | view | wiring | other
+    role: <one line — what this layer is>
+    # Disjoint. No two layers may claim the same file after `excludes` are
+    # applied. The installer verifies this mechanically.
+    owns:
+      - <glob>
+    # Carve-outs from `owns`. Needed where tests sit beside code (Go `*_test.go`
+    # owned by the same layer is fine; a separate test-author is not) or where a
+    # sibling layer owns a subdirectory.
+    excludes:
+      - <glob>
+    # What it must not touch, and which agent owns it instead.
+    forbidden:
+      - path: <glob>
+        owner: <agent name>
+    # Hard rules for this layer, sourced from the target repo's existing code.
+    # Kind-specific invariants come from the rule pack and are NOT repeated here.
+    rules:
+      - <e.g. "zero React/Apollo/framework imports">
+    # A finished, conforming file of this layer to match. Optional.
+    reference: <path>
+    # true = this agent writes and runs its own tests, and cannot report
+    # STATUS: done on a red run. The domain layer MUST be true.
+    owns_tests: true | false
+    # Override commands.test_targeted for this layer (two runners in one repo).
+    test_targeted: <optional>
+    # Max files per invocation. Default 3. Raise only where the stack forces
+    # several files per unit of work (.NET: interface + class + DI + test file).
+    max_files: 3
+    depends_on: [<agent names>]          # [] for the domain layer
+    parallel_with: [<agent names>]       # only for genuinely disjoint files
+    optional: true | false               # e.g. a state layer when no state is shared
+    # EXTRA skills only. Every implement agent already gets the always-on set
+    # (implement-foundation, hexagonal-architecture, tdd, separation-of-concerns,
+    # extract-til-you-drop, architecture) — never list those here.
+    skills: [<extra skill names>]
+
+plan:
+  # single = one read-only scout. full = scout ∥ spec-mapper → planner → gate.
+  depth: single | full
+  scout_name: <e.g. feature-scout | migration-scout>
+  # Blast-radius agent. Requires .codegraph/ in the target repo.
+  impact_scout: true | false
+  # External spec / PRD integration. Read-only: the harness reads the spec
+  # (spec-mapper, spec-implement) and never writes, commits or pushes to it.
+  spec:
+    enabled: true | false
+    path: <e.g. ./shared/prd.md>
+    submodule: true | false             # never initialised or updated by the harness
+
+verify:
+  layer_reviewer_checklist:
+    # Boundary violations that the gate and the tests cannot catch, specific to
+    # this repo. The invariant checklist is always emitted ahead of these.
+    - <e.g. "no framework imports in the domain/use-case layer">
+  # Greps the reviewer runs. `scope: diff` = only on changed files;
+  # `scope: repo` = whole tree, reported as new-vs-baseline.
+  mechanical_checks:
+    - description: <e.g. "no infrastructure import in domain">
+      command: <e.g. "grep -rnE 'from \"(react|mobx)' src/*/domain">
+      scope: diff | repo
+      expect: empty
+  # Language-native boundary tests. These make the dependency rule fail the
+  # gate instead of waiting for a reviewer to notice.
+  arch_tests:
+    # existing  = repo already has them; record the command in commands.arch_test.
+    # generate  = harness-init writes them (from the stack pack recipe) during
+    #             render, red-then-green like any other test, after confirmation.
+    # none      = user declined; reviewer greps only.
+    status: existing | generate | none
+    # e.g. NetArchTest / ArchUnitNET (dotnet), go-arch-lint / depguard (go),
+    # dependency-cruiser / eslint-plugin-boundaries (typescript),
+    # crate dependency graph + a deny test (rust), import-linter (python),
+    # ArchUnit (jvm).
+    tool: <tool name>
+    path: <where the boundary tests / config live>
+    # The rules encoded, one per line, each a dependency-rule specialisation.
+    rules: [<e.g. "Domain project references no other project">]
+
+testing:
+  placement: colocated | sibling-file | mirrored-tree | separate-project
+  # Rendered literally into the testing skill as the path formula.
+  path_formula: <e.g. "internal/<module>/<file>_test.go" | "tests/<Module>.Tests/<Type>Tests.cs">
+  runners:
+    - { name: <e.g. vitest>, covers: [<agent names>] }
+  doubles:
+    style: hand-written-fakes | in-memory-adapters | mocking-framework
+    # Test-only location. An in-memory adapter that production config can
+    # select (a fakes/offline mode) is a driven ADAPTER owned by an adapter
+    # layer, not a double. The composition root may reference in-memory
+    # adapters; it never references this location.
+    location: <glob>
+    rule: <e.g. "fakes for repositories; no mocking framework for repos">
+    # Fakes are declared as the port type, never inferred from the fake.
+    typed_as_port: true
+  # How to observe a call to a collaborator without replacing it, in this stack.
+  # TS: vi.spyOn call-through; Go: a recording decorator over the port;
+  # C#: hand-written recording fake (Moq CallBase needs virtual members).
+  spy_technique: <one sentence>
+  # How an agent makes RED an assertion failure rather than a compile failure in
+  # a compiled language. From the stack pack.
+  # A string, or a map by return shape when one stub does not fit every layer
+  # (sync rule vs async port vs UI hook). From the stack pack.
+  red_stub: <e.g. "declare the func returning zero values" |
+             { sync: "return ok(<dummy>)", async: "return okAsync(<dummy>)",
+               hook: "return a fixed placeholder object of the hook's shape",
+               component: "render null", state: "fields at initial values" }>
+  # Each layer renders the key matching what it returns (stack pack §5 says
+  # which key each kind uses).
+  tested_layers: [<agent names whose output must be tested>]
+  naming: user-facing | technical   # user-facing emits the test-naming skill
+
+skills:
+  # INVARIANT — always emitted, identical in every project. Not configurable.
+  invariant: [hexagonal-architecture, tdd, separation-of-concerns,
+              extract-til-you-drop, orchestrator]
+  # FILLED — always emitted, rendered from the sections above.
+  filled: [architecture, testing, error-handling]
+  # Emitted only when the flag is on. Emitted skill names are fixed:
+  # i18n → i18n, component_design → component-design,
+  # presentation_model → presentation-model, modules → modular-monolith,
+  # spec_implement → spec-implement; testing.naming: user-facing → test-naming.
+  optional:
+    i18n: { enabled: false, locales: [], rule: <namespace rule> }
+    # Frontend only. preview: storybook | none. platform: web | react-native.
+    component_design: { enabled: false, preview: none, platform: web }
+    # View-model / presenter pattern between UI and use cases.
+    presentation_model: false
+    modules: false                      # modular-monolith
+    spec_implement: false               # manual "implement from the spec" skill
+
+emit:
+  cursor_compat: true | false   # dual background flags + explicit Startup reads
+  agent_suffix: ".md" | ".agent.md"
+  # Where the root memory file goes. CLAUDE.md at repo root is standard;
+  # .claude/CLAUDE.md when the root file is owned by a framework generator.
+  memory_file: "CLAUDE.md" | ".claude/CLAUDE.md"
+  standing_authorization: true | false  # let the orchestrator spawn without asking
+  # Skills @-imported into the memory file, so they load on every turn,
+  # including small inline edits the orchestrator keeps for itself. The four
+  # invariants and `architecture` are always included; list the extras the
+  # main agent needs when it edits inline (e.g. error-handling, i18n,
+  # presentation-model). Each one costs context on every turn.
+  always_on_skills: [<skill names>]
+  # Model override for read-only runner agents (gate, test-runner). Empty = inherit.
+  runner_model: <optional>
+  hooks:
+    # SubagentStop hook: rejects a harness agent's final message that is not a
+    # valid receipt, or a test-owning builder's `done` receipt that does not
+    # report both a red and a green run. Opt-in — writes .claude/settings.json.
+    receipt_check: true | false
+
+# ── Workspace form ────────────────────────────────────────────────────────────
+# In workspace form, top-level `project` carries only name, summary and
+# kind: fullstack; `stack`, `language` and `frameworks` live per package, and
+# `skills.optional` is per package too.
+#
+# Use instead of the per-package sections above when the repo holds several
+# packages that each deserve their own hexagon (Go API + TS web, .NET solution
+# with independent services, a pnpm/cargo workspace with apps).
+#
+# Rendering:
+#   - invariant skills and orchestrator: once, in the root .claude/skills/;
+#   - filled skills and implement-foundation (it carries commands): one set per
+#     package, named <prefix>-architecture, <prefix>-implement-foundation etc.;
+#   - agents: all in the root .claude/agents/, named <prefix>-<agent>;
+#     plan agents and layer-reviewer are shared unless a package needs its own;
+#   - root memory file: workspace map + routing table (path → package);
+#   - <package.path>/CLAUDE.md: that package's commands, graph and dispatch
+#     table (loaded when an agent works under that path).
+# A change that crosses packages is two chains, sequenced by the contract
+# between them (the API schema, the shared types package), never one chain.
+workspace:
+  enabled: false
+  packages:
+    - name: <e.g. api>
+      path: <e.g. services/api>
+      prefix: <e.g. api>          # agent and skill name prefix; short, unique
+      project: { kind: ..., stack: ..., language: ..., frameworks: [...], summary: ... }
+      commands: { ... }           # same fields as top-level `commands`
+      architecture: { ... }
+      conformance: { ... }
+      layers: [ ... ]             # agent names WITHOUT the prefix; it is added at render
+      verify: { ... }
+      testing: { ... }
+      skills: { optional: { ... } }
+  # Contracts shared between packages, and which package owns each.
+  contracts:
+    - { what: <e.g. "OpenAPI spec">, path: <glob>, owner: <package name> }

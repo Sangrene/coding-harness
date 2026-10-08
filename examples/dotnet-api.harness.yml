@@ -1,0 +1,278 @@
+# Illustrative — not reverse-engineered from a real repo.
+# A .NET 9 Clean Architecture solution: one project per layer, one test
+# project per tested layer. Shows `separate-project` test placement, excludes
+# carving the composition-root files out of every layer, max_files raised
+# where C# forces several files per unit of work, and a `partial` gap typical
+# of the template: the repository interface living next to EF Core.
+harness_version: 2
+
+project:
+  name: acme-api
+  kind: service
+  stack: dotnet
+  language: "C# 13"
+  frameworks: ["ASP.NET Core 9 (minimal APIs)", "EF Core 9", "ErrorOr", "FluentValidation", "xUnit"]
+  summary: Order-management HTTP API — Clean Architecture solution with Domain, Application, Infrastructure and Api projects.
+
+commands:
+  run: dotnet
+  exec: ""
+  add_dependency: "dotnet add <project> package <name>"
+  gate:
+    - "dotnet build --no-restore -warnaserror"
+  gate_name: build-guard
+  test_targeted: "dotnet test {project} --no-restore --filter \"FullyQualifiedName~{filter}\""
+  test_target_hint: "{project} = the test project dir (tests/Acme.Application.Tests), {filter} = Namespace.Class or Class.Method"
+  test_all: "dotnet test --no-restore"
+  lint: "dotnet format --verify-no-changes"
+  arch_test: "dotnet test tests/Acme.Architecture.Tests --no-restore"
+  hygiene:
+    - "Never append 2>&1 — it swallows output and makes debugging impossible."
+    - "Run `dotnet restore` once after a package change; every other command uses --no-restore."
+    - "Builds can exceed a minute — always wait for exit."
+
+dev_run:
+  command: "dotnet run --project src/Acme.Api"
+  fakes_flag: "Persistence__Provider=InMemory"
+  notes:
+    - "SQL Server mode reads ConnectionStrings__Default from user-secrets, never from appsettings.json."
+
+architecture:
+  shape: full
+  dependency_rule: "Acme.Domain references nothing; Acme.Application references Domain only and declares the interfaces it needs; Acme.Infrastructure implements them; Acme.Api references Application, and Infrastructure only for DI registration."
+  hexagon:
+    domain_type:      { name: entity / value object,     path: "src/Acme.Domain/<Aggregate>/<Entity>.cs" }
+    domain_error:     { name: "static <Aggregate>Errors (ErrorOr.Error)", path: "src/Acme.Domain/<Aggregate>/<Aggregate>Errors.cs" }
+    driving_port:     { name: command / query handler,   path: "src/Acme.Application/<Feature>/<UseCase>/<UseCase>Handler.cs" }
+    driving_adapter:  { name: minimal-API endpoint,      path: "src/Acme.Api/Endpoints/<Feature>Endpoints.cs" }
+    driven_port:      { name: "I<Capability> interface", path: "src/Acme.Application/Abstractions/I<Capability>.cs" }
+    driven_adapter:   { name: EF Core repository,        path: "src/Acme.Infrastructure/Persistence/<Entity>Repository.cs" }
+    test_double:      { name: "InMemory<Capability>",    path: "tests/Acme.Application.Tests/Fakes/InMemory<Capability>.cs" }
+    composition_root: { name: "Program.cs + Add<Layer>() extensions", path: "src/Acme.Api/Program.cs, src/*/DependencyInjection.cs" }
+  exemplar_slice: "src/Acme.Application/Orders/PlaceOrder/"
+  leakage_examples: ["DbContext / DbSet<T>", "IQueryable<T>", "[Table] / [Column] / [Key]", "EntityEntry", "DbUpdateException", "HttpContext", "[JsonPropertyName]"]
+
+  errors:
+    type: "ErrorOr<T>"
+    never_throw: true            # exceptions only for bugs; expected failures are Error values
+    discriminate_by: "Error.Type (NotFound, Validation, Conflict, …) then Error.Code (\"Order.NotFound\")"
+    classification:
+      - { source: "FindAsync returns null", becomes: "OrderErrors.NotFound", where: "src/Acme.Infrastructure/Persistence/" }
+      - { source: "DbUpdateConcurrencyException", becomes: "Error.Conflict(\"Order.Concurrency\")", where: "src/Acme.Infrastructure/Persistence/" }
+      - { source: "FluentValidation failures", becomes: "Error.Validation per failure", where: "src/Acme.Application/<Feature>/<UseCase>/<UseCase>Handler.cs" }
+      - { source: "ErrorOr errors (outbound)", becomes: "ProblemDetails with status from Error.Type", where: "src/Acme.Api/Common/ErrorOrResults.cs" }
+    traps:
+      - "reading `.Value` without checking `.IsError`"
+      - "`throw` inside a handler for a not-found case"
+      - "catching `Exception` in Infrastructure and returning Error.Failure — hides the bug class"
+      - "returning `List<Error>` from a handler instead of `ErrorOr<T>`"
+
+  validation:
+    library: FluentValidation
+    placement: "AbstractValidator<TCommand> beside each command in Application, run by the handler before any port call; domain factories enforce invariants and return ErrorOr"
+
+  type_escape_hatches: ["! (null-forgiving)", "dynamic", "unchecked (T) casts", "#pragma warning disable", "ErrorOr .Value without IsError"]
+  modules: { enabled: false }
+
+conformance:
+  level: partial
+  gaps:
+    - role_or_rule: driven_port
+      finding: >
+        IOrderRepository is declared in Acme.Infrastructure/Persistence beside its
+        EF implementation, and Acme.Application.csproj has a ProjectReference to
+        Acme.Infrastructure to see it. The port is derived from the adapter and
+        the dependency points outward. Fix: move the interface to
+        Application/Abstractions in Application vocabulary (no IQueryable), drop
+        the ProjectReference.
+      paths: ["src/Acme.Infrastructure/Persistence/I*Repository.cs", "src/Acme.Application/Acme.Application.csproj"]
+      disposition: migrate
+      layers: [infrastructure-builder, application-builder]
+
+layers:
+  - agent: domain-builder
+    kind: domain
+    role: entities, value objects, domain errors, and their tests
+    owns:
+      - "src/Acme.Domain/**"
+      - "tests/Acme.Domain.Tests/**"
+    excludes:
+      - "**/bin/**"
+      - "**/obj/**"
+      - "src/Acme.Domain/Acme.Domain.csproj"
+      - "src/Acme.Domain/DependencyInjection.cs"
+    rules:
+      - "No package reference except ErrorOr. No EF, ASP.NET or FluentValidation type."
+      - "Factories return ErrorOr<T>; constructors are private."
+      - "Collections exposed as IReadOnlyList<T>."
+    reference: "src/Acme.Domain/Orders/Order.cs"
+    owns_tests: true
+    max_files: 3
+    depends_on: []
+    parallel_with: []
+    optional: false
+    skills: []
+
+  - agent: application-builder
+    kind: application
+    role: commands, queries, handlers, validators, driven-port interfaces, and their tests
+    owns:
+      - "src/Acme.Application/**"
+      - "tests/Acme.Application.Tests/**"
+    excludes:
+      - "**/bin/**"
+      - "**/obj/**"
+      - "src/Acme.Application/DependencyInjection.cs"
+      - "src/Acme.Application/Acme.Application.csproj"
+    rules:
+      - "Driven ports live in Abstractions/ and speak domain types — no IQueryable, no Expression<Func<>>."
+      - "One handler per use case; validator beside the command."
+      - "Handlers return ErrorOr<T> and never throw for expected failures."
+    reference: "src/Acme.Application/Orders/PlaceOrder/PlaceOrderHandler.cs"
+    owns_tests: true
+    max_files: 4                 # command + validator + handler + test
+    depends_on: [domain-builder]
+    parallel_with: []
+    optional: false
+    skills: []
+
+  - agent: infrastructure-builder
+    kind: driven-adapter
+    role: EF Core DbContext, entity configurations, migrations, repositories, external clients
+    owns:
+      - "src/Acme.Infrastructure/**"
+      - "tests/Acme.Infrastructure.Tests/**"   # mapper / error-classification tests
+    excludes:
+      - "**/bin/**"
+      - "**/obj/**"
+      - "src/Acme.Infrastructure/DependencyInjection.cs"
+      - "src/Acme.Infrastructure/Acme.Infrastructure.csproj"
+    rules:
+      - "Mapping lives in IEntityTypeConfiguration<T>, never as attributes on domain types."
+      - "Repositories return materialised domain objects; IQueryable never leaves the class."
+      - "Classify DbUpdateException / concurrency into ErrorOr errors at the repository."
+    reference: "src/Acme.Infrastructure/Persistence/OrderRepository.cs"
+    owns_tests: true             # mappers and error classification, test-first; DbContext I/O is not unit-tested
+    # interface impl + entity configuration + DbContext DbSet + migration + seed:
+    # the stack forces several files per unit of work here.
+    max_files: 5
+    depends_on: [application-builder]
+    parallel_with: [api-builder]
+    optional: false
+    skills: []
+
+  - agent: api-builder
+    kind: driving-adapter
+    role: minimal-API endpoints, request/response contracts, ErrorOr → ProblemDetails
+    owns: ["src/Acme.Api/**"]
+    excludes:
+      - "**/bin/**"
+      - "**/obj/**"
+      - "src/Acme.Api/Program.cs"
+      - "src/Acme.Api/DependencyInjection.cs"
+      - "src/Acme.Api/Acme.Api.csproj"
+      - "src/Acme.Api/appsettings*.json"
+    rules:
+      - "An endpoint maps the request to a command, calls one handler, maps the result with ToProblem()."
+      - "Request/response records live in Api/Contracts; domain types are never serialised."
+    owns_tests: false
+    max_files: 3
+    depends_on: [application-builder]
+    parallel_with: [infrastructure-builder]
+    optional: false
+    skills: []
+
+  - agent: wiring-agent
+    kind: wiring
+    role: Program.cs, Add<Layer>() extension methods, project references, configuration
+    owns:
+      - "src/Acme.Api/Program.cs"
+      - "src/*/DependencyInjection.cs"
+      - "src/*/*.csproj"
+      - "src/Acme.Api/appsettings*.json"
+      - "tests/Acme.Architecture.Tests/**"
+      - "Acme.sln"
+      - "Directory.Build.props"
+      - "Directory.Packages.props"
+    excludes: ["**/bin/**", "**/obj/**"]
+    rules:
+      - "Program.cs calls AddApplication(), AddInfrastructure(config), AddApi() and maps endpoints. Nothing else."
+      - "A new ProjectReference must point inward; Application never references Infrastructure."
+    owns_tests: false
+    max_files: 4
+    depends_on: [infrastructure-builder, api-builder]
+    parallel_with: []
+    optional: true
+    skills: []
+
+plan:
+  depth: full
+  scout_name: feature-scout
+  impact_scout: false
+  spec: { enabled: false }
+
+verify:
+  layer_reviewer_checklist:
+    - "No Microsoft.EntityFrameworkCore or Microsoft.AspNetCore using in Domain or Application."
+    - "Port interfaces are in Application/Abstractions, never in Infrastructure."
+    - "No IQueryable<T> or Expression<Func<>> in a port signature."
+    - "Endpoints hold no business branching; handlers hold no HTTP types."
+  mechanical_checks:
+    - description: "no EF Core or ASP.NET in inner projects"
+      command: "grep -rnE 'using Microsoft\\.(EntityFrameworkCore|AspNetCore)' src/Acme.Domain src/Acme.Application --include='*.cs'"
+      scope: repo
+      expect: empty
+    - description: "no port declared in Infrastructure"
+      command: "grep -rnE 'public interface I[A-Z]' src/Acme.Infrastructure --include='*.cs'"
+      scope: repo
+      expect: empty
+    - description: "Application does not reference Infrastructure"
+      command: "grep -n 'Acme.Infrastructure' src/Acme.Application/Acme.Application.csproj"
+      scope: repo
+      expect: empty
+  arch_tests:
+    # The ProjectReference graph already makes Domain → Infrastructure a
+    # compile error. These cover what references cannot: namespaces inside a
+    # project and the reference that exists today (see conformance).
+    status: generate
+    tool: NetArchTest.Rules
+    path: "tests/Acme.Architecture.Tests"
+    rules:
+      - "Acme.Domain depends on no other Acme assembly and not on Microsoft.EntityFrameworkCore"
+      - "Acme.Application does not depend on Acme.Infrastructure or Acme.Api"   # Skip until migrated, as below
+      - "Types named I*Repository reside in Acme.Application.Abstractions"   # generated with Skip until the gap above is migrated
+      - "Only Acme.Api depends on Microsoft.AspNetCore"
+
+testing:
+  placement: separate-project
+  path_formula: "tests/Acme.<Layer>.Tests/<Feature>/<Type>Tests.cs"
+  runners:
+    - { name: "dotnet test (xUnit)", covers: [domain-builder, application-builder, infrastructure-builder] }
+  doubles:
+    style: hand-written-fakes
+    location: "tests/Acme.Application.Tests/Fakes/**"
+    rule: "Hand-written in-memory fakes of Application/Abstractions interfaces; no Moq for repositories."
+    typed_as_port: true          # IOrderRepository orders = new InMemoryOrderRepository();
+  spy_technique: "a hand-written recording fake that implements the interface, records calls, and delegates to the in-memory fake (Moq CallBase needs virtual members)"
+  red_stub: "declare the method with its final signature and body `throw new NotImplementedException();` — it compiles, the test fails"
+  tested_layers: [domain-builder, application-builder, infrastructure-builder]
+  naming: technical
+
+skills:
+  invariant: [hexagonal-architecture, tdd, separation-of-concerns, extract-til-you-drop, orchestrator]
+  filled: [architecture, testing, error-handling]
+  optional:
+    i18n: { enabled: false }
+    component_design: { enabled: false }
+    presentation_model: false
+    modules: false
+    spec_implement: false
+
+emit:
+  cursor_compat: false
+  agent_suffix: ".md"
+  memory_file: "CLAUDE.md"
+  standing_authorization: false
+  runner_model: ""
+  hooks:
+    receipt_check: false

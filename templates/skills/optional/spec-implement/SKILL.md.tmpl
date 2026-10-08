@@ -1,0 +1,78 @@
+---
+name: {{SPEC_SKILL}}
+description: "Implement features from the written spec ({{SPEC_PATH}}) in {{PROJECT_NAME}}. Invoke ONLY when the user explicitly asks to 'implement from the spec', 'catch up with the spec', 'implement the PRD features' or a close equivalent. Do not auto-trigger. Reads the spec (read-only), maps it against the code, narrows the scope with the user's prompt, then runs the normal orchestrated chain — scout, builders, gate, verify. Never edits, commits or pushes the spec."
+---
+
+<!-- harness: emitted when skills.optional.spec_implement is true; requires
+     plan.spec.enabled. Drop each line mentioning spec-mapper when
+     that agent is not emitted. Strip every harness comment at render. -->
+
+# Implement from the spec
+
+Manual only. The user's prompt always comes with it, and it narrows or enriches
+the scope ("only the report validation feature", "everything about sign-in").
+
+**This skill does not implement anything itself.** It decides *what* to build
+from the spec; the `orchestrator` skill decides *how*, through the normal chain.
+Every rule of the harness applies unchanged: hexagon, TDD, receipts, gate.
+**The spec is read-only.** Nothing in this skill writes, commits or pushes to
+`{{SPEC_PATH}}`.
+
+## 1. Read the spec
+
+Check that `{{SPEC_PATH}}` exists (and, for a submodule, that it is
+initialised). If not, stop and tell the user — never initialise, clone or
+update it yourself. Otherwise: {{SPEC_REFRESH_COMMAND}}
+
+Then read the sections of `{{SPEC_PATH}}` relevant to the prompt: feature
+descriptions, contracts (inputs, outputs, error cases), status markers, and
+anything that changed since the code last matched it.
+
+## 2. Map the spec against the code
+
+Dispatch `plan/spec-mapper` (in parallel with `plan/{{SCOUT}}` for the same
+scope). Without it, do the comparison through `{{SCOUT}}`. The result is a
+three-way list:
+
+- **to build** — described, absent from the code;
+- **to fix** — present, but diverging (field names, missing validation, wrong
+  error case, wrong status code);
+- **compliant** — skip.
+
+Every business rule the spec states ("only if", "must", "at most") becomes a
+`{{DOMAIN_AGENT}}` task. That is where spec-driven work most often goes wrong:
+a rule copied into a handler because the spec described it next to an
+endpoint.
+
+## 3. Apply the user's prompt
+
+- **Narrow** — build only what the prompt names; list the other gaps at the end.
+- **Enrich** — business context the prompt adds ("must handle concurrent
+  uploads") is a requirement even if the spec is silent.
+- **Ambiguity** left after both — ask the user. If the choice is low-risk and
+  reversible, pick the most reasonable reading and state it in the summary;
+  never bury an assumption in a code comment only.
+
+## 4. Implement through the chain
+
+Follow `orchestrator`: rules to `{{DOMAIN_AGENT}}` first, then the layers in
+order, then the gate and the verify pair. One feature at a time when features
+touch the same files. A feature too large for one pass is split, and its
+partial state is stated in the summary.
+
+## 5. Summarise to the user
+
+1. **Built or fixed** — features and entry points.
+2. **Skipped** — remaining gaps, when the scope was narrowed.
+3. **Assumptions** — each ambiguity and how it was resolved.
+4. **Spec divergences** — anything deliberately left diverging from the spec,
+   and any place the spec looks outdated. The user updates the spec; this
+   skill never does.
+5. **Follow-ups for the user** — migrations to run, configuration to set.
+
+## Rules
+
+- Never edit, commit or push `{{SPEC_PATH}}` — report divergences instead.
+- Never let the spec's layout of a feature decide its layering — the hexagon
+  does.
+- Never report done off a red gate or a red test run.

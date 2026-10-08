@@ -1,0 +1,77 @@
+<!-- harness: workspace mode only. Rendered once per workspace.packages[] entry
+     to <package.path>/CLAUDE.md, with that package's values. Claude Code loads
+     it when an agent works under that path. `@` imports and links resolve
+     relative to this file: {{PACKAGE_SKILLS_PREFIX}} is the relative path from
+     <package.path> to the root .claude/skills/ (e.g. `../../.claude/skills/`).
+     Agent names render prefixed: `<prefix>-<agent>`. A section marked "drop
+     when" is removed whole, heading included. Strip every harness comment at
+     render. -->
+# {{PACKAGE_NAME}} — `{{PACKAGE_PATH}}`
+
+{{PACKAGE_SUMMARY}} ({{PACKAGE_STACK}})
+
+This package is its own hexagon with its own chain. The root `CLAUDE.md` holds
+the workspace map and the rules shared by every package.
+
+<!-- harness: drop the next paragraph when this package's conformance.level is
+     conforming. -->
+Existing code in this package does not all conform yet ({{CONFORMANCE_LEVEL}}).
+New code follows the skills below, never the deviating code next to it. The known
+deviations are listed in `{{ARCH_SKILL}}`{{MIGRATION_DOC_CLAUSE}}.
+
+## Commands
+
+Run from `{{PACKAGE_PATH}}` unless a command says otherwise.
+
+Gate, in order, all must pass (run by `verify/{{GATE_AGENT}}` after every
+implement round):
+
+{{GATE_STEPS}}
+
+{{COMMAND_RULES}}
+
+## Skills for this package
+
+<!-- harness: {{PACKAGE_ALWAYS_ON_IMPORTS}} renders one
+     `@{{PACKAGE_SKILLS_PREFIX}}<skill>/SKILL.md` line each: {{ARCH_SKILL}},
+     then this package's emit.always_on_skills entries by rendered
+     (prefixed) name. -->
+{{PACKAGE_ALWAYS_ON_IMPORTS}}
+
+- [`{{ARCH_SKILL}}`]({{PACKAGE_SKILLS_PREFIX}}{{ARCH_SKILL}}/SKILL.md) — this
+  package's names and paths for every hexagon role.
+- [`{{TESTING_SKILL}}`]({{PACKAGE_SKILLS_PREFIX}}{{TESTING_SKILL}}/SKILL.md) —
+  test placement, doubles, assertions.
+- [`{{ERRORS_SKILL}}`]({{PACKAGE_SKILLS_PREFIX}}{{ERRORS_SKILL}}/SKILL.md) —
+  this package's failure type and where errors are classified.
+{{PACKAGE_SKILL_INDEX}}
+
+<!-- harness: drop this section when workspace.contracts names no contract
+     this package owns or consumes. -->
+## Contracts
+
+{{PACKAGE_CONTRACTS}}
+
+A change to a contract this package owns runs this package's chain first, to
+`STATUS: done` through verify. The consuming package's chain runs after, against
+the finished contract.
+
+## Workflow
+
+```text
+{{GRAPH}}
+```
+
+{{GREEN_GATE_SENTENCE}} Every test-owning builder reports red **then** green.
+
+## Touch area → agent
+
+| Touch area | Agent |
+|---|---|
+| Scope, rules, audit, gaps in scope | `plan/{{SCOUT}}` |
+{{DISPATCH_TABLE}}
+| Gate ({{GATE}}) after any implement round | `verify/{{GATE_AGENT}}` |
+| Targeted tests after the gate | `verify/{{TEST_RUNNER}}` |
+| Boundary review of the diff after the gate | `verify/{{LAYER_REVIEWER}}` |
+
+Each implement agent edits at most its file cap per invocation ({{FILE_CAPS}}).

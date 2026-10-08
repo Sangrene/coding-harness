@@ -1,0 +1,102 @@
+---
+name: {{I18N_SKILL}}
+description: "Translation enforcement for {{PROJECT_NAME}}. Always use when creating or editing any driving adapter or presentation code that shows text to a user — labels, headings, buttons, placeholders, helper and error messages, accessibility labels, notifications, emails, CLI output meant for end users. Every user-visible string goes through the translation call; a literal string a user can read is a bug. Also use when adding or renaming a translation key, mapping a domain error to a message, pluralising, interpolating values, or reviewing UI text."
+---
+
+<!-- harness: emitted when skills.optional.i18n.enabled. Fill I18N_CALL and
+     I18N_FILES from the repo's existing translated code and locale files;
+     I18N_LOCALES and I18N_RULE from skills.optional.i18n. I18N_MISSING_MARKER
+     from skills.optional.i18n.missing_marker, else the marker already used in
+     the repo's locale files (e.g. "TODO: translate"). Every example below
+     must be rewritten with the repo's real call, key and file names. Strip
+     every harness comment at render. -->
+
+# i18n — every user-visible string is translated
+
+**A string a user can read never appears as a literal in a component, view,
+template, presentation model or user-facing message builder.** It is a key,
+resolved through the translation call.
+
+Translation call: {{I18N_CALL}}
+Locale files: `{{I18N_FILES}}`
+Locales: {{I18N_LOCALES}} — every key exists in every one of them.
+
+## What must be translated
+
+| Context | Literal (wrong) | Translated (right) |
+|---|---|---|
+| Visible text | `Create project` | the key `project.create.title` |
+| Label / placeholder / helper prop | `"Email"` | `common.signIn.emailLabel` |
+| Accessibility label, tooltip, alt text | `"Close"` | `common.actions.close` |
+| Error shown to the user | `"Something went wrong"` | `errors.generic` |
+| A value inside a sentence | `"Hello " + name` | `common.greeting` with `{ name }` |
+| A count | `n + " items"` | a plural key with `count` |
+
+## What does not need translation
+
+- Style class names, layout tokens, icon ids.
+- Technical values a user never reads: ids, URLs, enum values, test ids.
+- Developer logs and diagnostics.
+- Domain data the user typed in or the server returned verbatim.
+
+## Keys and namespaces
+
+{{I18N_RULE}}
+
+- Keys are dot-nested by feature then section: `<feature>.<section>.<label>`.
+  Segments follow the casing already used in `{{I18N_FILES}}`.
+- A key lives in exactly one namespace, the same in every locale; the
+  translation call names that namespace.
+- Choose the **most specific** namespace that fits. Generic actions (save,
+  cancel, loading) live in the shared one; feature text lives with the feature.
+- A key names the meaning, not the wording: `project.create.submit`, not
+  `project.clickHereToCreate`.
+
+## Adding a key
+
+1. Add it to **every** locale in {{I18N_LOCALES}} in the same change, in the
+   namespace chosen above. A key present in one locale and missing in another
+   is a finding.
+2. Write the translation you know. In every locale where you do not know it,
+   the value is exactly `{{I18N_MISSING_MARKER}}` — never an omitted key, never
+   a copy of another locale's text, never a question left for later.
+3. Never reuse a key for a different meaning because the text happens to match
+   today — the translations will diverge.
+
+## Interpolation and plurals
+
+Never build a sentence by concatenation or string templates: word order differs
+between languages. Pass values to the translation call and let the locale file
+place them. Counts use the translation library's plural forms, never an `if`
+on `count === 1`.
+
+## Errors → messages
+
+A domain error reaches the user as a key chosen **by its kind** (see
+`{{ERRORS_SKILL}}`), never by its message text, and never by showing the raw
+message:
+
+```text
+error kind  →  message key
+NotFound    →  <feature>.errors.notFound
+Conflict    →  <feature>.errors.conflict
+anything else → errors.generic
+```
+
+That mapping lives in the driving adapter or presentation model that shows the
+error — never in the domain, which knows no locale.
+
+## Placement
+
+Translation is a presentation concern. The domain and the use cases return
+typed values and typed errors, never translated text and never message keys.
+A use case returning a user-facing string is a finding (`separation-of-concerns`).
+
+## Checklist before reporting
+
+- [ ] No user-visible literal remains in the files you touched.
+- [ ] Every new key exists in every locale, in the same namespace; unknown translations are `{{I18N_MISSING_MARKER}}`.
+- [ ] No concatenated or templated sentence; interpolation instead.
+- [ ] Plurals use plural forms.
+- [ ] Errors are mapped to keys by kind.
+- [ ] No translated text or key produced inside the domain or a use case.

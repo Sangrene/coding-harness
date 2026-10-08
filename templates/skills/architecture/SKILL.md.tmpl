@@ -1,0 +1,172 @@
+---
+name: {{ARCH_SKILL}}
+description: "How hexagonal architecture is realised in {{PROJECT_NAME}} — which file, package or project is which part of the hexagon, what each layer may and must never import, port rules, shared capability ports and their fakes, the layout of a vertical slice, naming conventions, the composition root, the exemplar slice to copy, the boundary tests, and the known deviations not to copy. Use when creating a new feature or {{DOMAIN_WORD}}, when placing a new file, when looking for the port, adapter or fake for something, when a nearby file looks like it breaks the rules, or when checking that a change matches this project's conventions. The model itself (dependency rule, ports, translation, scaled shapes, anti-patterns) is in hexagonal-architecture — this skill only maps it onto real paths."
+---
+
+# Architecture of {{PROJECT_NAME}}
+
+This project is hexagonal. That is not configurable — see
+`hexagonal-architecture` for the model, `separation-of-concerns` for placement
+decisions. **This skill is only the local vocabulary: which file plays which
+role, and where it goes.**
+
+If anything here ever appears to contradict `hexagonal-architecture`, the hexagon
+wins and this file is out of date — say so rather than following it.
+
+## The hexagon, in this project's names
+
+Shape: **{{ARCHITECTURE_SHAPE}}** (see "Scaled shapes" in
+`hexagonal-architecture` for what that removes — roles only, never rules).
+
+<!-- harness: one row per architecture.hexagon role, in this order: domain_type,
+domain_error, driving_port, driving_adapter, driven_port, driven_adapter,
+test_double, composition_root. A role marked `absent: by-shape` renders as
+"| <role> | — absent by shape | — |". A role listed in conformance.gaps renders
+its current name/path with "(deviation — see Known deviations)". Never blank. -->
+| Hexagon role | Here it is called | Path |
+|---|---|---|
+{{HEXAGON_ROLE_ROWS}}
+{{EXTRA_ROLE_ROWS}}
+
+Every file in a feature has exactly one of these roles. A file you cannot place
+in this table is a file whose role was never decided — decide it before writing
+more of it. A role marked absent does not exist in this codebase by design; do
+not invent it.
+
+## Layers and what each may import
+
+Which agent owns which paths, and the order layers are built in, are in the
+touch-area table and workflow graph in `{{MEMORY_FILE}}` — canonical there, not
+repeated here.
+
+<!-- harness: IMPORT_TABLE — one row per layer in layers[] (plus the
+composition root): "| <layer, as its path> | May import | Must never import |",
+built from the repo's real imports and the boundary-test rules. Name concrete
+modules, platform APIs and globals the inner layers must not touch (e.g. a
+core never imports platform/runtime APIs, timers, the clock, id generators,
+the HTTP client or its error type). Never blank. -->
+{{IMPORT_TABLE}}
+
+Dependency rule, in this project's terms: {{DEPENDENCY_RULE}}
+
+## Vertical slice layout
+
+```text
+{{SLICE_LAYOUT}}
+```
+
+Create the full slice even for a small feature. The structure is paid for once;
+un-mixing layers later is paid on every change.
+
+## Naming conventions
+
+{{NAMING_TABLE}}
+
+## Exemplar slice — copy this one
+
+`{{EXEMPLAR_SLICE}}`
+
+Read it before writing a new feature. It is the reference for the local
+conventions above — names, layout, file split. Where it disagrees with the
+invariant skills (`hexagonal-architecture`, `tdd`, `separation-of-concerns`,
+`extract-til-you-drop`), the invariant skills win: follow them, not the
+exemplar, and report the disagreement as a gap to record under "Known
+deviations".
+
+<!-- harness: REFERENCE_SLICES — one bullet per further slice worth reading,
+"- `<path>` — <what it exemplifies that the exemplar does not>" (e.g. auth
+flow, a platform capability behind a port, polling). Empty: drop the sentence
+and the list. -->
+Other reference slices, each for what it shows best:
+
+{{REFERENCE_SLICES}}
+
+## Driven ports
+
+<!-- harness: PORT_RULES — one bullet per repo-specific port rule, from the
+repo's real ports, the stack pack and the boundary tests: how a port is
+declared and typed (never inferred from its adapter), which types never appear
+in a port signature (platform, library, schema-library, state-library types;
+use plain domain descriptors instead), the required failure type, naming after
+the capability, and how an adapter that needs something the application
+provides gets it (a small port, implemented in the composition root — never a
+dependency on a use case). -->
+{{PORT_RULES}}
+
+## Shared capability ports
+
+Anything that reads the outside world — time, ids, delays, notifications,
+opening a URL — is a port, injected like any other. Inner layers never reach
+the global behind it. Their fakes are the ones tests use (`{{TESTING_SKILL}}`).
+
+<!-- harness: SHARED_PORTS_TABLE — "| Need | Port | Production adapter | Test
+fake | Path |", one row per shared capability port found in the repo (clock,
+id generator, scheduler, alerter, opener …), with real names. A capability the
+inner layers need but that has no port yet renders with "— (missing: add the
+port before using it)". No shared ports at all: "None yet. Add one, with its
+fake, before an inner layer needs time, ids or delays." -->
+{{SHARED_PORTS_TABLE}}
+
+<!-- harness: STATE_RULES — rendered only when a layer of kind `state` exists;
+otherwise empty and the heading is dropped. Content, from the repo's state
+port and exemplar store: "## State\n\n" + bullets — the state port is
+declared in <path> with no state-library type; the state adapter holds getters
+and setters only (dedupe, ordering, cascades are domain rules); use cases write
+state, driving adapters read it and never call a setter, and the context the
+UI reads never exposes setters; state is never the source of truth for a
+decision; the operation-state convention (status field shape, error field
+type); then a short code snippet of the exemplar store's shape, in the repo's
+language. -->
+{{STATE_RULES}}
+
+## Translation boundary, locally
+
+{{TRANSLATION_RULE}}
+
+Must never appear past the driven adapter: {{LEAKAGE_EXAMPLES}}.
+
+## Composition root
+
+Adapters are constructed only in `{{COMPOSITION_ROOT}}`, and injected downward.
+{{FAKE_WIRING}}
+
+## Errors and validation
+
+Error type: {{ERROR_TYPE}}, discriminated by {{ERROR_DISCRIMINATE_BY}}. Domain
+errors live in `{{DOMAIN_ERROR_PATH}}`. Validation: {{VALIDATION_PLACEMENT}}.
+Full rules and the classification table: `{{ERRORS_SKILL}}`.
+
+## Type escape hatches
+
+Flagged by review in every layer inside the driven adapters:
+{{TYPE_ESCAPE_HATCHES}}. Needing one there means a type is wrong upstream — fix
+the type.
+
+<!-- harness: render ARCH_TESTS_SECTION from verify.arch_tests when status is
+existing or generate:
+"## Boundary tests\n\nTool: <tool>. Location: `<path>`. Run: `<commands.arch_test>`
+(also run by the gate).\n\nEncoded rules:\n- <one bullet per rules[]>\n\nA failing
+boundary test is a design error in the change, never a test to relax."
+When status is none, render exactly: "## Boundary tests\n\nNone. The dependency
+rule is enforced by review and the reviewer's mechanical checks only." -->
+{{ARCH_TESTS_SECTION}}
+
+{{MODULES_SECTION}}
+
+## Known deviations
+
+Conformance: **{{CONFORMANCE_LEVEL}}**. {{MIGRATION_DOC_LINE}}
+
+<!-- harness: one row per conformance.gaps entry:
+"| <role_or_rule> | <finding> | `<paths>` | enforce-now: new code complies now / migrate: fixed when the file is touched | <what to do instead> |".
+No gaps: replace the table with "None recorded." MIGRATION_DOC_LINE is
+"Migration plan: `<conformance.migration_doc>`." or empty. -->
+| Rule or role | What the code does instead | Where | Disposition | Do instead |
+|---|---|---|---|---|
+{{KNOWN_DEVIATIONS_ROWS}}
+
+These are pre-existing and are **not** a licence to add more. New code follows
+the hexagon, never the deviating code next to it. `enforce-now` means any code
+you write or change in those paths complies immediately; `migrate` means the
+deviation is fixed when its file is touched, in scope, or reported to the
+orchestrator — never silently extended.

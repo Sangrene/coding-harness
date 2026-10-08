@@ -1,0 +1,90 @@
+---
+name: {{MODULES_SKILL}}
+description: "Module boundaries in {{PROJECT_NAME}}, a modular monolith: {{MODULE_UNIT}}, each module internally hexagonal. Use when adding a business area, deciding where a module boundary goes, letting one module use another, deciding what a module publishes, moving a type into or out of the shared kernel, adding an entry point that belongs to a module, or reviewing a cross-module import. Pairs with hexagonal-architecture, which governs layering inside a module; this skill governs what crosses between modules."
+---
+
+<!-- harness: emitted when architecture.modules.enabled (skills.optional.modules).
+     Fill MODULE_LAYOUT from the repo's real tree, MODULE_PUBLIC_SURFACE from how
+     a module exposes its contract (a crate's lib.rs, an index file, a public
+     package, a project's public types), SHARED_KERNEL_PATH from the shared
+     module's path, MODULE_ENFORCEMENT from what makes a boundary break the
+     build here (visibility modifiers, crate/project references, an import
+     linter rule) or "review only". Strip every harness comment at render. -->
+
+# Modular monolith
+
+Two orthogonal axes — keep them apart:
+
+| Axis | Governed by | Concern |
+|---|---|---|
+| **Inside a module** | `hexagonal-architecture`, `{{ARCH_SKILL}}` | domain → ports → adapters, nothing infrastructural inward |
+| **Between modules** | this skill | what a module publishes, what another may use |
+
+If `hexagonal-architecture` applies, this skill applies too. Layer *within* a
+module per the hexagon; cross a module boundary *only* per the rules below.
+
+## Structure
+
+```text
+{{MODULE_LAYOUT}}
+```
+
+Each module is a hexagon. Its published surface — {{MODULE_PUBLIC_SURFACE}} — is
+its contract with the rest of the codebase. Only the composition root sees every
+module's internals well enough to construct them.
+
+Enforcement: {{MODULE_ENFORCEMENT}}
+
+## Cross-module rules
+
+1. **A module uses another only through its published driving port** — the use
+   case or service contract it publishes. Never through its repository, its
+   driven ports, its adapters, or a write handle to its entities.
+2. **Publish narrowly.** The surface carries the driving port(s), the read-only
+   types their operations accept and return, the module's entry-point
+   registration, and its constructor. Everything else stays module-private.
+3. **No cycles.** If A needs B and B needs A, extract the shared concept into
+   the shared kernel or a third module, or invert one direction behind a port
+   the calling module declares.
+4. **The shared kernel (`{{SHARED_KERNEL_PATH}}`) holds no business area.** Only
+   cross-cutting, rule-free code: value objects more than one module uses, the
+   shared error type, cross-module ports, transport plumbing, test fixtures. A
+   type earns a place there only when more than one module needs it **and** it
+   carries no single module's rules.
+5. **Entry points belong to the module they serve.** A handler, consumer or
+   command lives in its module's driving-adapter folder and depends on that
+   module's driving port only; the module exposes a registration function the
+   composition root calls.
+6. **Wiring lives in the composition root**, the only place that names concrete
+   implementations. It constructs each module and injects one module's
+   published port into another where rule 1 allows.
+
+## Why through the driving port, never the repository
+
+The caller then depends on a contract, not on another module's storage. The
+callee can change its persistence freely, and extracting the module into its
+own service later swaps an in-process call for a remote one with no structural
+change. Reaching into another module's repository couples you to its storage
+and kills both.
+
+## Decisions
+
+- **New business area?** A new module, hexagonal inside, its surface
+  published, registered in the composition root.
+- **Module A needs data B owns?** Depend on B's published port; if it lacks the
+  read you need, add a minimal read-only operation to B's port (B's owner
+  builds it) — never reach for B's repository.
+- **Two modules need the same type?** Carries rules → it lives with the owning
+  module and is published, or it is a new module. Rule-free → shared kernel.
+- **Circular need?** Extract or invert (rule 3).
+- **Test fixtures used across modules?** Expose them through the stack's
+  test-only mechanism, never through production visibility.
+
+## Review checklist
+
+- [ ] No import of another module's internals (repository, adapter, driven
+      port, entity constructor).
+- [ ] Surface changes are minimal and read-only where possible.
+- [ ] Nothing with business rules added to the shared kernel.
+- [ ] No new dependency cycle between modules.
+- [ ] Concrete implementations named only in the composition root.

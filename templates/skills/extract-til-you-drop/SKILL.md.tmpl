@@ -1,0 +1,132 @@
+---
+name: extract-til-you-drop
+description: "Function decomposition via extract-til-you-drop, in any language. Always use when writing, editing, or reviewing logic in {{LOGIC_LAYERS}} — business rules, validation, access checks, orchestration, error mapping, mappers, presentation models, bug fixes — including new features and small additions — and when splitting a view that grew. Also use for refactor, SRP, long-method, long-function, clean-code and code-review requests, and in the REFACTOR step of tdd. Do not skip because the task seems small or the user did not mention extraction. If the architecture skill applies, this skill applies too."
+---
+
+# Extract Til You Drop
+
+Decompose every function by repeated extract-method until no further
+intention-revealing extraction remains.
+
+## When to apply
+
+Always, when writing or modifying logic in any layer that holds it:
+{{LOGIC_LAYERS}}. That is the domain and the use cases, and equally the mappers
+and error classifiers inside driven adapters and the presentation models —
+each is full of decisions. This is not a refactor-only skill — it governs new
+code as it is written. Views get the split rule below.
+
+Does not apply to: generated code, configuration objects, and straight-line
+adapter I/O plumbing with no decision in it. A mapper that decides (enum
+values, absent fields, dates, error kinds) is logic, not plumbing.
+
+## The rule
+
+A function does **one** thing, at **one** level of abstraction, and its name says
+what that thing is. If you can name a block of its body with a phrase that is not
+already the function's name, that block is a separate function.
+
+Signals to extract, in descending strength:
+
+1. You wrote a comment describing the next few lines. The comment is the name.
+2. A block is separated by a blank line for readability. The blank line is a seam.
+3. The function mixes levels: a policy decision next to string formatting, or a
+   business rule next to an error conversion.
+4. The body contains `and`/`then` when described out loud: "validates the input
+   **and** persists it **and** notifies".
+5. A conditional branch is large enough to read as its own paragraph.
+6. A loop body does non-trivial work per item.
+7. A boolean expression needs more than one clause to be understood — extract it
+   into a named predicate.
+
+## Workflow
+
+1. Write the logic the direct way first — get it correct.
+2. Read the body and mark every seam from the list above.
+3. Extract each seam into a private function named for its **intent**, not its
+   mechanism.
+4. Re-read the parent. It should now read as a sentence-level summary of the
+   operation, with no implementation detail left.
+5. Repeat on each extracted function. Extraction usually cascades one level.
+6. Stop only at the stop conditions below.
+
+## Naming
+
+Name the extracted function for what the caller wants, not how it is done.
+
+| Mechanism (bad) | Intent (good) |
+|---|---|
+| loop over items and check | has expired item |
+| do validation step 2 | reject duplicate email |
+| map DTO to entity internal | to domain |
+| handle stuff | anything — this name is always a defect |
+
+Spell the intent in the language's own casing (`hasExpiredItem`,
+`has_expired_item`, `HasExpiredItem`); the rule is about the words, not the
+case.
+
+A name you cannot write without `And`, `Or`, `Handle`, `Process`, `Manage`, or a
+number is telling you the extraction boundary is wrong, not that naming is hard.
+
+## Where extracted code lives
+
+**First, check it is an extraction at all.** A seam that turns out to be a
+domain rule — an "only if", "must", "cannot", "at most", "when X then Y" sitting
+inside a use case, a handler, a view-model or a state holder — is not an
+extraction. It is a placement fix: move it to a named pure function in the
+domain, per `separation-of-concerns`, and test it there. This is the most common
+finding. Everything below stays in its own layer.
+
+{{EXTRACT_LOCATION}}
+
+A use case over ~80 lines, or a driving adapter over ~150 lines, almost always
+hides a missing extraction — and often a rule that belongs in the domain. Check
+it before adding to it.
+
+Extracted helpers stay **private to their layer**. Extraction never moves logic
+across an architectural boundary — if a helper wants a dependency its layer may
+not have, the boundary is wrong, not the extraction.
+
+## Stop conditions
+
+Stop when all of these hold:
+
+- Every function is nameable in one intent-revealing phrase.
+- No function mixes two levels of abstraction.
+- No remaining block would gain a clearer name by being extracted.
+- Extracting further would produce a helper used once whose name only restates
+  the line it wraps (`addOne`, `getName`) — that is over-extraction, back out.
+
+Cost boundary: a helper that exists only to satisfy a line-count rule is noise.
+The test is always "does the name add meaning", never "is the function short".
+
+## Splitting a view
+
+A view (UI component, template) holds no logic, but it still decomposes: split
+it by **nameable concern**. A section you could describe on its own, a large
+conditional branch, non-trivial markup per item of a collection, or a comment
+like "left column" marks a child view. Extract it with only the props it needs,
+named in plain words; if no name comes, the boundary is wrong. A two-line
+fragment used once with no identity of its own stays inline. Logic found while
+splitting is not extracted into the view — it moves to the presentation model
+or the domain.
+
+## Writing new logic (not just refactors)
+
+When adding a branch to an existing function, do not grow the function — extract
+the branch. A function that accreted three features is the normal failure mode,
+and it never announces itself; each individual addition looked small.
+
+## Done checklist
+
+Before finishing any logic change:
+
+- [ ] Every comment inside a function body has become a function name, or been
+      deleted as redundant.
+- [ ] No function body has an unexplained blank-line block.
+- [ ] Every boolean condition with 2+ clauses is a named predicate.
+- [ ] The top-level function reads as a summary a non-author could follow.
+- [ ] Every seam that was a business rule moved to the domain, with its test.
+- [ ] No helper crosses a layer boundary.
+- [ ] Every view you touched is split by nameable concern, nothing over-split.
+- [ ] Tests still green — extraction is behaviour-preserving, always.

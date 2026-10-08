@@ -1,0 +1,75 @@
+<!-- harness: fragment, not an agent file. Rendered into _layer-builder.md.tmpl
+     at {{SELF_TEST_SECTION}} when owns_tests: true. When owns_tests is false,
+     that placeholder renders as the short block at the bottom of this file
+     instead. Strip every harness comment at render. -->
+
+## Tests are yours — and they come first
+
+Follow `tdd` for the loop and `{{TESTING_SKILL}}` for the conventions. Test file
+location: `{{TEST_PATH_FORMULA}}`.
+
+The order is not negotiable, and not a formality:
+
+1. Write the failing test for the behaviour you are about to build.
+2. From `{{WORKDIR}}`, run `{{TEST_TARGETED}}` ({{TEST_TARGET_HINT}}) and
+   **watch it fail** for the reason you expect. Never assert to yourself that it would
+   fail — run it. A test you never saw fail proves nothing, and it is the one
+   that never fails again.
+3. Write the minimum code to pass.
+4. Run it again and watch it pass.
+5. Refactor with `extract-til-you-drop`, staying green.
+6. Next behaviour — error path, validation, boundary. One per loop.
+
+<!-- harness: {{RED_STUB}} is this layer's stub. testing.red_stub as a string
+     renders verbatim. As a map, pick the entry by what this layer returns —
+     sync (pure rules, mappers), async (ports, use cases, adapters), hook
+     (presentation models), or any other key the stack pack defines. A layer
+     that returns several shapes (a driven adapter: sync mapper + async
+     adapter) renders each entry it uses as "`<shape>` (<what>): <stub>",
+     joined with "; ". This is the only place the stub is stated in the
+     rendered agent; implement-foundation points here. -->
+Red = the test compiles, runs, and fails for the expected reason. A test that
+fails because a symbol does not exist has not tested anything yet. Stub the
+signature first, so the failure is an assertion: {{RED_STUB}}.
+
+Use {{DOUBLES_STYLE}} from `{{DOUBLES_LOCATION}}` for dependencies. Declare
+each double as the port type, never as the double's own type — a double that
+drifts from its port must fail to compile, not pass silently. Never fake the
+unit under test.
+
+If a test is hard to write, fix the design — an extra dependency, a missing port,
+a unit doing two jobs. Do not reach for a heavier mock to make the difficulty go
+away; that vents the exact pressure that keeps this layer testable.
+
+## Self-test gate — mandatory before reporting done
+
+`STATUS: done` means "the {{LAYER_ROLE}} is tested and green", not "the files
+exist". Before writing your final message, from `{{WORKDIR}}`:
+
+1. Run `{{TEST_TARGETED}}` on your tests. {{HYGIENE_SHORT}}
+2. Run the gate, in order: {{GATE}}. Your tests can be green while a file you
+   touched no longer compiles for its callers.
+3. If either fails, fix your code or your test and re-run both — never hand off
+   red.
+4. Report both halves of the loop in `OUTCOME`, on one line, using the literal
+   words `red` and `green`: what the test did when it first failed (red, on
+   which assertion or stub), and the final green count. A receipt that
+   reports only a passing run is indistinguishable from one where the test was
+   written after the code, and will be sent back.
+5. Report `STATUS: done` only once both runs are green. If you cannot get there
+   because a dependency you do not own is missing or wrong, report
+   `STATUS: blocked` with the decisive failure line and name that dependency's
+   owning agent in `NEXT`.
+
+The next agent in the chain builds on your finished call signature. It must never
+be dispatched while your tests are red.
+
+---
+
+<!-- harness: owns_tests: false variant — everything below this comment. -->
+
+## Tests
+
+You do not own test bodies for this layer. {{NON_TEST_OWNER_RULE}} After your
+edits, still run, from `{{WORKDIR}}`, the gate ({{GATE}}) and `{{TEST_TARGETED}}`
+for the modules you touched, and report the result in `OUTCOME`. {{HYGIENE_SHORT}}

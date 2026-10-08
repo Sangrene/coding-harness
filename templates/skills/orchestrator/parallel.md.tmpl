@@ -1,0 +1,62 @@
+# Parallel and Sequential Rules
+
+<!-- harness: workspace mode — {{GRAPH}} and {{GRAPH_TABLE}} render once per
+     package, each under a `### <package name>` heading; agent-name
+     placeholders in the rules render as the slash-joined list of each
+     package's rendered name. Strip every harness comment at render. -->
+
+Orchestrator MUST parallelize where safe: send multiple subagent delegations in
+one turn when the dependency graph allows it — and never anywhere else.
+
+## Dependency graph
+
+```text
+{{GRAPH}}
+```
+
+## Table
+
+| Agent | Phase | Depends on | Parallel with | Must follow |
+|---|---|---|---|---|
+{{GRAPH_TABLE}}
+
+## Explicit rules
+
+- **`{{SCOUT}}` runs alone first** for any multi-layer request — nothing else is
+  dispatched in the same turn, since its report shapes what the implement agents
+  are told to build.
+- **`{{DOMAIN_AGENT}}` runs alone, before every other builder**, whenever the
+  scout lists a rule, a new type or a new error kind. Its receipt fixes the
+  domain names the next agents use. If a later builder reports `blocked` because
+  a rule or type is missing, re-dispatch `{{DOMAIN_AGENT}}`. Never let the
+  blocked builder write it.
+<!-- harness: {{PARALLEL_PAIR_RULE}} renders one bullet per layers[].parallel_with
+     pair, empty when there is none:
+     "- **Parallelize `<a>` + `<b>`** when the feature needs both. Dispatch both
+       in the same turn. Fix the names they share — port names, state field
+       names, shared type names — in *both* dispatch prompts up front, so
+       neither waits on the other's in-progress file. `{{GATE_AGENT}}` is the
+       safety net for any mismatch." -->
+{{PARALLEL_PAIR_RULE}}
+- **A test-owning builder's `STATUS: done` means red-then-green, not files
+  written.** It self-tests with a targeted test run and the gate (the commands
+  in its foundation skill) before reporting. An `OUTCOME` that reports only a green run, with no failing
+  first run, means the loop was skipped: treat it as `needs-orchestrator` and
+  re-dispatch. On `STATUS: blocked`, re-dispatch the agent it names.
+- **Never dispatch a dependent layer in the same turn as the layer it reads**, and
+  never off a receipt that isn't `STATUS: done` — it reads the *finished,
+  verified* contract (exported type, call signature, return shape), not the
+  planned one.
+- **Never dispatch `{{TEST_RUNNER}}` or `{{LAYER_REVIEWER}}` before
+  `{{GATE_AGENT}}` reports `STATUS: done`.**
+- **Always pair `{{TEST_RUNNER}}` + `{{LAYER_REVIEWER}}` in one turn** once the
+  gate passes — both are read-only and touch no shared file.
+- **Never parallelize the implement chain** beyond the explicit pairs above, if
+  any.
+
+## Token note
+
+Parallel agents use independent context. Prefer parallel dispatch for the
+genuinely independent implement pairs and for the two read-only verify agents —
+never for anything that reads another agent's not-yet-written, or not-yet-green,
+file.

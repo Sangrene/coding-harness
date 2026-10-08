@@ -1,0 +1,180 @@
+---
+name: orchestrator
+description: "Meta-skill for the root agent's orchestrator role in {{PROJECT_NAME}}: how to plan, dispatch and track multi-layer hexagonal work (a new feature, a new {{DOMAIN_WORD}}, a migration toward the hexagon, or any change spanning {{LAYER_CHAIN_PROSE}}) across plan/{{PLAN_AGENTS}}, implement/{{IMPLEMENT_AGENTS}}, and verify/{{VERIFY_AGENTS}}. Trigger whenever a request spans 2+ layers or asks for a new feature/{{DOMAIN_WORD}}/migration — not for single-file edits, typo fixes, or read-only questions."
+---
+
+<!-- harness: workspace mode — rendered once at the root. Every agent-name
+     placeholder renders as the slash-joined list of each package's rendered
+     name (e.g. `api-domain-builder / web-domain-builder`). Strip every harness
+     comment at render. -->
+
+# Orchestrator
+
+The root agent acts as **orchestrator** for multi-layer work. Delegate to the
+phase-scoped subagents below, store their receipts only, and don't re-read the
+files they touched unless verify fails or the user asks.
+
+## Phase folders
+
+```text
+.claude/agents/
+{{PHASE_FOLDER_TREE}}
+```
+
+## When to delegate vs. keep inline
+
+Delegate when the request spans 2+ layers, adds a use case, scaffolds a new
+{{DOMAIN_WORD}}, or changes more than ~2 files. Keep inline: a single-file typo
+fix, "explain X", a read-only question, or a tiny receipt-driven follow-up on one
+already-identified file.
+
+## Plan step
+
+For a **new {{DOMAIN_WORD}}**, a **migration**, or a feature whose shape isn't
+obvious, dispatch `plan/{{SCOUT}}` first. It is read-only and reports the
+business rules, what already exists, the hexagon role and owner of every target
+file, the contracts to fix, and the known gaps in the touched area, as a
+structured report followed by its receipt.
+For a **small addition to an already-conforming {{DOMAIN_WORD}}**, skip straight
+to the touch-area dispatch table in `{{MEMORY_FILE}}` — you already know which
+builder owns the file.
+
+**Rules go to `{{DOMAIN_AGENT}}` first.** If the scout lists any business rule,
+dispatch `{{DOMAIN_AGENT}}` before anything else in the implement chain. Every
+other builder depends on its types, and a rule that has no domain home ends up in
+a use case, a state class or a driving adapter.
+
+**Scope gaps explicitly.** When the scout reports gaps in the touched area,
+decide per gap: fix now (dispatch the owner), or leave and record. Tell the user
+which. A gap whose disposition is `migrate` and whose file this feature touches
+defaults to fix now — that is what the disposition means. Never pass a gap to a
+builder as "fine for now". That's pre-clearing.
+
+<!-- harness: drop the next paragraph when conformance.migration_doc is empty. -->
+For a migration, the plan lives in `{{MIGRATION_DOC}}`. Tell the scout which step
+of it this work covers, and update nothing in it yourself.
+
+## Dispatch and parallelism
+
+See [parallel.md](parallel.md) for the dependency graph and the exact rules on
+which subagents may share a turn.
+
+Dispatch means an actual Agent tool call with `subagent_type` set to the agent's
+name. Reading an agent's `.md` file and then doing its work inline yourself is
+**not** dispatch — it skips the isolated context and the receipt boundary the
+whole pattern depends on. If you find yourself editing `implement/`- or
+`verify/`-owned files directly instead of calling the Agent tool, stop and
+dispatch properly.
+
+## Writing dispatch prompts — say what, not how
+
+Give a subagent the goal, the contracts it must fit ({{CONTRACT_EXAMPLES}}), and
+the constraints it can't discover on its own. Do **not** specify the internals of
+the file it owns. It has its own agent file and project skills for that; you do
+not have its context, and a prompt that dictates implementation silently
+overrides rules you never read. Its rules outrank your prompt: when they
+conflict, it will report `blocked` instead of complying.
+
+**The contract comes from the receipts, never from re-reading files.** Each
+implement receipt's `OUTCOME` names what its layer exposes (types and error
+kinds, port and fake names, state fields and setters, use-case signature and
+input type, presentation return shape, view props and locale keys); a plan
+report's "Contracts to fix" names what is agreed up front. Copy those names
+verbatim into the next dispatch prompt. If a receipt does not name a contract
+the next layer needs, re-dispatch its author to report it — do not open its
+files and do not guess.
+
+Concretely, when dispatching:
+
+- **Do** state the interface the neighbouring layers already agreed on.
+- **Do** state genuine constraints: which caller mounts it, a known trap in the
+  test setup, a naming convention two parallel agents must share.
+- **Don't** prescribe internal control flow, local state, or helper structure
+  inside the owned file.
+- **Don't** pre-resolve a boundary question. If you're unsure which layer owns a
+  piece of logic, leave it out and let the agent apply its own rules — or ask the
+  user. Writing "X is fine here" makes an architectural decision on behalf of an
+  agent better equipped to make it.
+
+### Never pre-clear anything to a verify agent
+
+`{{GATE_AGENT}}`, `{{TEST_RUNNER}}` and `{{LAYER_REVIEWER}}` exist to catch what
+you and the implement agents missed — including mistakes in your own dispatch
+prompts. Telling `{{LAYER_REVIEWER}}` "that deviation is expected and fine"
+disables it exactly where it was needed.
+
+Give verify agents scope and context — which files changed, what the feature
+does. Never give them verdicts. If a deviation is genuinely deliberate, let the
+reviewer flag it and overrule the finding yourself in the open, where the user
+can see the decision.
+
+## TDD is enforced by the receipts, not by you
+
+{{TEST_OWNING_AGENTS}} own their own tests and must run them before reporting
+`STATUS: done`, red then green. Your job is to refuse to advance the chain on a
+receipt that isn't `done` — not to write or fix their tests yourself.
+
+<!-- harness: drop the next paragraph when emit.hooks.receipt_check is false. -->
+A `SubagentStop` hook bounces a malformed receipt — or a test-owning builder's
+`done` with no red run — back to the subagent automatically. That catches the
+shape, not the substance. It is not a substitute for you refusing a receipt that
+isn't `done`.
+
+## Scope cap
+
+No implement agent edits more than its file cap per invocation (the caps are
+listed in `{{MEMORY_FILE}}`). If a layer needs more, split the work into two dispatches
+rather than letting one agent sprawl.
+
+When the planner already split a step to fit a cap, dispatch the split as
+planned. Merging two planned steps into one prompt to save a turn breaks the
+cap the planner respected, and the gate will reject the dispatch.
+
+## Receipts
+
+See [receipt.md](receipt.md) for the exact output contract every dispatched
+subagent must follow: plan agents put a structured report before the receipt,
+verify agents may put a findings list there, implement agents end with the
+receipt only. Store receipts and plan reports only — never re-read a subagent's edited
+files unless a verify agent reports `blocked`/`needs-orchestrator`, or the user
+explicitly asks.
+
+## Visibility — surface every delegation and receipt
+
+A subagent's final message is not shown to the user automatically — it only
+becomes visible if the orchestrator posts it. Silence after a dispatch does not
+mean nothing happened; it means the receipt was swallowed. On every dispatch:
+
+1. **Before dispatching**, post a one-line message naming the agent and its task:
+   `→ dispatching {{EXAMPLE_DISPATCH_LINE}}`. For a parallel pair, post one line
+   per agent in the same turn.
+2. **After the subagent finishes**, post its receipt back to the user — verbatim,
+   or as a compact one-liner (`{{EXAMPLE_RECEIPT_LINE}}`) — before the next
+   dispatch. Never proceed silently.
+3. **If a subagent reports `blocked` or `needs-orchestrator`**, say so explicitly,
+   quote the `BLOCKERS` line, and state what happens next (re-dispatch, escalate
+   to the user, or stop).
+
+This is also how you and the user confirm the pattern is actually running: the
+phase folders and skill descriptions don't call anything by themselves — the only
+thing that dispatches `plan/`, `implement/`, `verify/` agents is the
+orchestrator's own Agent tool calls, following this skill.
+
+<!-- harness: drop this section when workspace.enabled is false. -->
+## Workspace — one chain per package
+
+Each package has its own hexagon, its own chain and its own `CLAUDE.md` with its
+graph and touch-area table. Route a request by path using the table in
+`{{MEMORY_FILE}}`, then dispatch that package's agents (`<prefix>-<agent>`).
+
+A change that crosses packages is **two chains, sequenced by the shared
+contract** — never one chain. Run the chain of the package that owns the
+contract first, to `STATUS: done` through verify; then dispatch the consuming
+package's chain with the finished contract in its prompts.
+
+## No meta-orchestrator subagent
+
+There is no subagent that dispatches the others. A subagent that dispatches
+subagents would collapse the root's turn-level parallelism and collapse multiple
+receipts into one opaque summary — the root agent always walks the graph itself,
+turn by turn, whether the change is small or a full vertical slice.

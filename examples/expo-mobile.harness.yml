@@ -1,0 +1,313 @@
+# Modelled on a real Expo codebase — a mobile-app instance, ported from the
+# web app in react-router-web.harness.yml. Same hexagon, same agent chain; what moves is the UI
+# layout (src/screens, src/components, Expo Router in src/app), the platform
+# and the test runners: vitest for everything pure, jest-expo + RNTL for
+# view-model hooks, routed by suffix in scripts/test.ts.
+harness_version: 2
+
+project:
+  name: acme-mobile
+  kind: mobile-app
+  stack: typescript
+  language: "TypeScript 5"
+  frameworks: ["Expo SDK 57", "React Native", "Expo Router", "MobX", "ArkType", "neverthrow", "react-hook-form", "NativeWind", "Vitest", "jest-expo"]
+  summary: Expo / React Native client of the same backend as the web app — hexagonal domains, MobX state adapters, native adapters behind ports.
+
+commands:
+  run: bun run
+  exec: bunx
+  # Never `bun add` for Expo / RN packages — expo install pins SDK-compatible versions.
+  add_dependency: "bunx expo install"
+  gate:
+    - "bun run typecheck"        # bunx tsc --noEmit
+  gate_name: typecheck-guard
+  # scripts/test.ts routes on the FIRST path: *.view-model.test.tsx → jest, else vitest.
+  test_targeted: "bun run test {path}"
+  test_target_hint: "{path} = test file(s) of ONE kind per call — all *.view-model.test.tsx, or all *.test.ts; never mix them"
+  test_all: "bun run test"
+  lint: "bun run lint"
+  arch_test: ""
+  hygiene:
+    - "Run scripts with bun run and CLIs with bunx. Never npx, never npm."
+    - "Never append 2>&1 — it swallows output and makes debugging impossible."
+    - "Never create or edit ios/ or android/ by hand — they are generated (CNG); configure app.json and config plugins."
+    - "Test runs can exceed a minute — always wait for exit."
+
+# From AGENTS.md (root), which .claude/CLAUDE.md imports.
+carry_forward:
+  - "Expo ships breaking changes every SDK release. Before touching an Expo, EAS or React Native API: read the major version of `expo` in package.json, fetch https://docs.expo.dev/versions/v<major>.0.0/, and for anything else follow https://docs.expo.dev/llms.txt — never answer from memory."
+  - "Use Expo Router for all navigation. Routes live in src/app/; keep non-route code outside it."
+  - "Run lint and typecheck before declaring any task done."
+  - "After adding a library with native code, the app needs a development build (Expo Go only bundles its own modules)."
+
+dev_run:
+  command: "bun run start"
+  fakes_flag: "EXPO_PUBLIC_IN_MEMORY_REPOSITORIES=true"
+  notes:
+    - "Offline mode is served by src/<domain>/adapters/inMemory*.ts, never by tests/ fakes."
+
+architecture:
+  shape: full
+  dependency_rule: "domain/ depends on nothing; features/ depend on domain/ and ports/; adapters and stores implement ports; screens call features; only src/shared/app knows concrete adapters."
+  hexagon:
+    domain_type:      { name: "<Entity> type + pure rule functions", path: "src/<domain>/domain/<entity>.ts" }
+    domain_error:     { name: "<Domain>Error union (kind)",         path: "src/<domain>/domain/<domain>.errors.ts" }
+    driving_port:     { name: feature core,                          path: "src/<domain>/features/<feature>/<feature>.core.ts" }
+    driving_adapter:  { name: screen / component,                    path: "src/screens/<feature>/*.tsx, src/components/**/*.tsx" }
+    driven_port:      { name: "<Capability> interface",              path: "src/<domain>/ports/<capability>.port.ts, src/shared/<capability>/<capability>.port.ts" }
+    driven_adapter:   { name: "create<Technology><Capability>",     path: "src/<domain>/adapters/** (http*, inMemory*, expo*, fileSystem*)" }
+    test_double:      { name: "createFake<Capability>",             path: "src/<domain>/tests/<capability>.fake.ts" }
+    composition_root: { name: AppProvider + app.adapters + app.core, path: "src/shared/app/" }
+  exemplar_slice: "src/note/"
+  leakage_examples: ["ArkType DTOs", "ApiError", "expo-print / expo-file-system types in a port", "File / Blob / ArrayBuffer in domain (use a uri)", "ObservableMap in a state port"]
+
+  errors:
+    type: "ResultAsync<T, <Domain>Error> (neverthrow)"
+    never_throw: true
+    discriminate_by: "kind field"
+    classification:
+      - { source: "ApiError.errorCode", becomes: "<Domain>Error kind", where: "src/<domain>/adapters/<domain>.dto.ts (to<Domain>Error)" }
+      - { source: "expo-print native error", becomes: "ExportError kind", where: "src/export/adapters/expoPrintError.ts" }
+      - { source: "rule refused", becomes: "domain kind", where: "src/<domain>/domain/<entity>.ts" }
+    traps:
+      - "`.map(() => ok())` nests a Result"
+      - "`.match(() => undefined, () => undefined)` swallows both branches"
+      - "a native module promise awaited without ResultAsync.fromPromise rejects past the port"
+
+  validation:
+    library: ArkType
+    placement: "response DTOs in adapters/; cores export input schemas for arktypeResolver; domain/ never imports ArkType"
+
+  type_escape_hatches: ["as (outside branded-id constructors)", "any", "!", "@ts-expect-error"]
+  modules: { enabled: false }
+
+conformance:
+  # The port from the web app is mostly done; docs/migration.md
+  # tracks it. The repo's clean-architecture skill says "none recorded" —
+  # these are what detection still finds.
+  level: partial
+  migration_doc: "docs/migration.md"
+  gaps:
+    - role_or_rule: unplaced files
+      finding: "formatExportLabel.ts sits at the domain root with no hexagon role; it is display formatting imported by screen view-models from src/."
+      paths: ["src/export/formatExportLabel.ts"]
+      disposition: migrate
+      layers: [view-model-builder]
+    - role_or_rule: test placement
+      finding: "src/export/tests/ holds the core test and a stray sed backup (export.core.test.ts-E) beside the fakes."
+      paths: ["src/export/tests/*.test.ts", "src/export/tests/*-E"]
+      disposition: migrate
+      layers: [use-case-builder]
+    - role_or_rule: domain_error
+      finding: "HTTPClient returns ResultAsync<T, Error>; every to<Domain>Error maps it, but the shared port's contract is unclassified."
+      paths: ["src/shared/httpClient/*.ts"]
+      disposition: migrate
+      layers: [repository-builder]
+
+layers:
+  - agent: domain-builder
+    kind: domain
+    role: domain types, pure rule functions, <Domain>Error
+    owns: ["src/<domain>/domain/**"]
+    rules:
+      - "Imports nothing external except neverthrow — no ArkType, MobX, React Native, Expo modules, uuid."
+      - "One named, exported pure function per rule; time and ids come in as parameters."
+      - "Files are referenced by uri, never by bytes."
+    reference: "src/note/domain/note.ts"
+    owns_tests: true
+    test_targeted: "bun run test:unit {path}"
+    depends_on: []
+    parallel_with: []
+    optional: false
+    skills: [error-handling]
+
+  - agent: repository-builder
+    kind: driven-adapter
+    role: driven ports, DTO + mappers, HTTP / in-memory / Expo adapters, fakes, shared capabilities
+    owns:
+      - "src/<domain>/ports/*.port.ts"
+      - "src/<domain>/adapters/**"
+      - "src/<domain>/tests/**"
+      - "src/shared/*/**"
+    excludes:
+      - "src/<domain>/ports/<domain>State.port.ts"
+      - "src/shared/app/**"
+      - "src/shared/i18n/locales/**"
+      - "src/shared/*/*.core.ts"
+      - "src/shared/*/*.store.ts"
+    rules:
+      - "Port first, in domain types, alone in its file. Adapter annotated `: <Capability>`."
+      - "Expo / native module calls only inside adapters/, wrapped in ResultAsync.fromPromise with a classifier."
+      - "Every HTTP or native adapter has an inMemory* (or unavailable*) twin for fake mode and unsupported platforms."
+    reference: "src/note/adapters/httpNoteRepository.ts"
+    owns_tests: true     # mappers and adapters with logic (expoPdfExporter.test.ts)
+    test_targeted: "bun run test:unit {path}"
+    depends_on: [domain-builder]
+    parallel_with: [store-builder]
+    optional: false
+    skills: [error-handling]
+
+  - agent: store-builder
+    kind: state
+    role: state port and the MobX store implementing it
+    owns:
+      - "src/<domain>/ports/<domain>State.port.ts"
+      - "src/<domain>/<domain>.store.ts"
+      - "src/shared/*/*.store.ts"
+    excludes: ["src/shared/app/**"]
+    rules:
+      - "The state port holds no MobX type. Setters and getters only."
+    owns_tests: false
+    depends_on: [domain-builder]
+    parallel_with: [repository-builder]
+    optional: true
+    skills: []
+
+  - agent: use-case-builder
+    kind: application
+    role: feature cores, registration, CoreArgs
+    owns:
+      - "src/<domain>/features/**"
+      - "src/<domain>/<domain>.core.ts"
+      - "src/<domain>/<domain>.core.args.ts"
+      - "src/<domain>/<domain>.core.test.ts"
+      - "src/shared/*/*.core.ts"
+    excludes: ["src/shared/app/**"]
+    rules:
+      - "The core calls rules; it does not write them."
+      - "Inject clock, ids, scheduler. No expo-* import, no AppState, no setTimeout."
+      - "Never self-start; foreground polling is subscribed in src/shared/app."
+    owns_tests: true
+    test_targeted: "bun run test:unit {path}"
+    depends_on: [repository-builder, store-builder]
+    parallel_with: []
+    optional: false
+    skills: [error-handling]
+
+  - agent: view-model-builder
+    kind: presentation
+    role: view-model hooks, private hooks, error→i18n mappers, and their tests
+    owns:
+      - "src/screens/**/*.ts"
+      - "src/components/**/*.ts"
+      - "src/screens/**/*.view-model.test.tsx"
+      - "src/components/**/*.view-model.test.tsx"
+    excludes: ["src/components/**/index.ts", "src/screens/**/index.ts"]
+    rules:
+      - "Cores and read-only state only through useAppContext(); never call a store setter."
+      - "Map error.kind to an i18n key."
+      - "View-model tests render the hook with RNTL renderHook under jest-expo; spy on real cores."
+    # Routes by suffix: *.view-model.test.tsx → jest-expo, helper *.test.ts → vitest.
+    test_targeted: "bun run test {path}"
+    owns_tests: true
+    depends_on: [use-case-builder]
+    parallel_with: []
+    optional: false
+    skills: [presentation-model, error-handling]
+
+  - agent: component-builder
+    kind: driving-adapter
+    role: screens, organisms, molecules, atoms, barrels, locale keys
+    owns:
+      - "src/screens/**/*.tsx"
+      - "src/components/**/*.tsx"
+      - "src/components/**/index.ts"
+      - "src/screens/**/index.ts"
+      - "src/shared/i18n/locales/{en,fr}/*.json"
+    excludes: ["**/*.view-model.test.tsx"]
+    rules:
+      - "Call use<Feature>ViewModel() and render. No logic hooks, no useAppContext()."
+      - "React Native primitives and NativeWind classes; no DOM elements."
+      - "Every user-visible string through t(); keys in both en and fr."
+    owns_tests: false
+    depends_on: [view-model-builder]
+    parallel_with: []
+    optional: false
+    skills: [i18n]
+
+  - agent: wiring-agent
+    kind: wiring
+    role: composition root and Expo Router routes
+    owns:
+      - "src/shared/app/**"
+      - "src/app/**"
+    rules:
+      - "Construct adapters in app.adapters.ts / app.provider.tsx only; HTTP vs inMemory* by EXPO_PUBLIC_IN_MEMORY_REPOSITORIES."
+      - "Route files render a screen and nothing else."
+    owns_tests: false
+    test_targeted: "bun run test:unit {path}"
+    depends_on: [view-model-builder, component-builder]
+    parallel_with: []
+    optional: true
+    skills: []
+
+plan:
+  depth: single
+  scout_name: feature-scout
+  impact_scout: true          # .codegraph/ present
+  spec:
+    enabled: true
+    path: docs/spec.md
+    submodule: false
+
+verify:
+  layer_reviewer_checklist:
+    - "domain/** imports nothing but neverthrow and other domain/ modules."
+    - "No expo-* or react-native import outside adapters/, src/screens, src/components, src/app and src/shared/app."
+    - "No gating condition, limit or cascade in a core body, store, view-model or component."
+    - "View-models call no store setter; components call no useAppContext()."
+    - "Every user-visible string through t(), keys in en and fr."
+  mechanical_checks:
+    - description: "no Expo / RN import in domain, ports or cores"
+      command: "grep -rnE 'from \"(expo-[a-z-]+|react-native[a-z-]*|mobx)\"' src/*/domain src/*/ports src/*/features"
+      scope: repo
+      expect: empty
+    - description: "no time or uuid in cores"
+      command: "grep -rnE 'new Date\\(\\)|Date\\.now\\(\\)|from \"uuid\"|setTimeout' src --include='*.core.ts'"
+      scope: repo
+      expect: empty
+    - description: "components reaching into the context"
+      command: "grep -rl 'useAppContext' src/screens src/components --include='*.tsx' | grep -v '\\.test\\.'"
+      scope: repo
+      expect: empty
+  arch_tests:
+    # Candidate: generate, dependency-cruiser, .dependency-cruiser.cjs.
+    status: none
+    tool: ""
+    path: ""
+    rules: []
+
+testing:
+  placement: colocated
+  path_formula: "src/<domain>/domain/<entity>.test.ts, src/<domain>/adapters/<file>.test.ts, src/<domain>/features/<feature>/<feature>.core.test.ts, src/screens/<feature>/<feature>.view-model.test.tsx"
+  runners:
+    - { name: vitest, covers: [domain-builder, repository-builder, use-case-builder, view-model-builder, wiring-agent] }
+    - { name: jest-expo, covers: [view-model-builder] }
+  doubles:
+    style: hand-written-fakes
+    location: "src/<domain>/tests/*.fake.ts"
+    rule: "Fakes are ports with controls (failNext, seed); never fake a core or store in a view-model test."
+    typed_as_port: true
+  spy_technique: "vi.spyOn / jest.spyOn on the real core without a mock implementation — it calls through"
+  red_stub: "export the function with its final signature and a body returning errAsync({ kind: \"unexpected\" }) — neither runner typechecks, so RED is an assertion failure"
+  tested_layers: [domain-builder, repository-builder, use-case-builder, view-model-builder]
+  naming: user-facing
+
+skills:
+  invariant: [hexagonal-architecture, tdd, separation-of-concerns, extract-til-you-drop, orchestrator]
+  filled: [architecture, testing, error-handling]
+  optional:
+    i18n: { enabled: true, locales: [en, fr], rule: "t(\"<namespace>:<key>\"); every key in src/shared/i18n/locales/en and fr" }
+    component_design: { enabled: true, preview: none, platform: react-native }
+    presentation_model: true
+    modules: false
+    spec_implement: false
+
+emit:
+  cursor_compat: false
+  agent_suffix: ".md"
+  memory_file: ".claude/CLAUDE.md"
+  standing_authorization: true
+  runner_model: ""
+  hooks:
+    receipt_check: false
