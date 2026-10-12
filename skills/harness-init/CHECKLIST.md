@@ -40,8 +40,8 @@ names and the package's commands from its `{{WORKDIR}}` (the package path).
 - [ ] Every agent has a unique `name` equal to its file name minus
       `emit.agent_suffix` (`.md` or `.agent.md`); every agent file ends in that
       suffix. In workspace mode layer and gate agents are `<prefix>-<agent>`;
-      `scout`, `feature-planner`, `architecture-gate`, `layer-reviewer` and
-      `test-runner` are unprefixed.
+      `scout`, `feature-planner`, `architecture-gate` and `layer-reviewer` are
+      unprefixed.
 - [ ] Every `skills:` entry in an agent's frontmatter names a directory under
       `.claude/skills/` with a `SKILL.md`. `implement-foundation` resolves at
       `.claude/skills/implement-foundation/` — in workspace mode
@@ -192,7 +192,7 @@ names and the package's commands from its `{{WORKDIR}}` (the package path).
 - [ ] The memory file's touch-area table covers every layer glob. In workspace
       mode the root routing table covers every package path, and each
       `<package>/CLAUDE.md` covers that package's layers.
-- [ ] Gate, test-runner and layer-reviewer are read-only in their tool lists and
+- [ ] Gate (which also runs the targeted tests) and layer-reviewer are read-only in their tool lists and
       say so in their bodies.
 - [ ] No settings change other than the opted-in receipt hook; no ownership
       hook; no existing settings key dropped; `settings.local.json` untouched.
@@ -231,8 +231,8 @@ Dispatch a real, small task and check:
       green one.
 - [ ] Its `done` receipt reports a green run it actually executed.
 - [ ] The gate agent reports `file:line: message`, not a log dump.
-- [ ] `layer-reviewer` and `test-runner` are dispatched in the same turn, after
-      the gate.
+- [ ] `layer-reviewer` is dispatched only after the gate agent (gate + targeted
+      tests) reports `done`.
 - [ ] The orchestrator posted a dispatch line and a receipt for every agent, and
       never re-read an edited file without cause.
 - [ ] With the hook on: a deliberately prose-ending reply from one agent is sent

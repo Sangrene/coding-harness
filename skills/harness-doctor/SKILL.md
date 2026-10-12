@@ -58,7 +58,7 @@ Run each; record pass / fail with the evidence (path, line, glob).
      `<prefix>-architecture`, `-testing`, `-error-handling` and
      `-implement-foundation` skills, and its `<path>/CLAUDE.md`; invariant
      skills and `orchestrator` exist once at the root; shared agents (scout,
-     planner, architecture-gate, layer-reviewer, test-runner) are unprefixed
+     planner, architecture-gate, layer-reviewer) are unprefixed
      and their `skills:` list names every package's skills;
    - optional skills and optional agents exist exactly when their flags /
      emit-table conditions (`templates/agents/optional-agents.md`) hold.
@@ -86,6 +86,9 @@ Run each; record pass / fail with the evidence (path, line, glob).
      `plan.spec.sync_agent` / `commit_format` field, or a graph / dispatch row
      naming spec-sync → fail: the harness never writes the spec; run
      harness-upgrade to remove it (deletion needs the user's confirmation);
+   - `plan.spec.enabled: true` while `plan.spec.path` is missing from the
+     working tree (uninitialised submodule) → fail: `spec-mapper` has nothing
+     to read;
    - `emit.cursor_compat: true` without `.cursor/rules/**` / `.cursor/agents/**`
      → warn;
    - `.claude/settings.json` / `settings.local.json` parse (`jq .`). Lost

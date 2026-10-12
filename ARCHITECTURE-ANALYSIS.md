@@ -22,7 +22,7 @@ every generated harness.
 .claude/agents/
   plan/       read-only: scope, audit, blast radius, checklist, boundary gate
   implement/  one agent per architectural layer, each owning a disjoint file set
-  verify/     read-only: compile/typecheck gate, test runner, boundary reviewer
+  verify/     read-only: gate (compile/typecheck + targeted tests), boundary reviewer
 ```
 
 The folder is the phase. An agent's phase determines whether it may write, whether
@@ -59,14 +59,14 @@ scout (read-only, alone, first)
   → [ independent foundation layers in parallel ]
     → dependent layer chain (strictly sequential, each self-tested green)
       → wiring / composition root
-        → compile-or-typecheck gate (sequential, blocking)
-          → [ test-runner ∥ boundary-reviewer ]  (read-only, parallel)
+        → compile-or-typecheck + targeted-test gate (sequential, blocking)
+          → boundary-reviewer  (read-only)
 ```
 
-Only two parallel groups are ever safe:
-1. the foundation pair that writes disjoint files whose shared names the
-   orchestrator fixes up-front in both dispatch prompts;
-2. the two read-only verify agents, after the gate is green.
+Only one parallel group is ever safe: the foundation pair that writes disjoint
+files whose shared names the orchestrator fixes up-front in both dispatch
+prompts. Verify is sequential: one gate agent (gate + targeted tests), then the
+reviewer.
 
 Everything else is sequential because a downstream layer reads the
 **finished, verified** shape of the layer above — not its planned shape.

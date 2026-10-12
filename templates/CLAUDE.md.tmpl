@@ -116,8 +116,7 @@ requests, which still need the user's confirmation.
 |---|---|
 | Scope, rules, audit, gaps in scope | `plan/{{SCOUT}}` |
 {{DISPATCH_TABLE}}
-| Gate ({{GATE}}) after any implement round | `verify/{{GATE_AGENT}}` |
-| Targeted tests after the gate | `verify/{{TEST_RUNNER}}` |
+| Gate ({{GATE}}) + targeted tests after any implement round | `verify/{{GATE_AGENT}}` |
 | Boundary review of the diff after the gate | `verify/{{LAYER_REVIEWER}}` |
 
 ### Rules that survive every refactor

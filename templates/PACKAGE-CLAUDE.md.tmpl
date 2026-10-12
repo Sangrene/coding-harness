@@ -70,8 +70,7 @@ the finished contract.
 |---|---|
 | Scope, rules, audit, gaps in scope | `plan/{{SCOUT}}` |
 {{DISPATCH_TABLE}}
-| Gate ({{GATE}}) after any implement round | `verify/{{GATE_AGENT}}` |
-| Targeted tests after the gate | `verify/{{TEST_RUNNER}}` |
+| Gate ({{GATE}}) + targeted tests after any implement round | `verify/{{GATE_AGENT}}` |
 | Boundary review of the diff after the gate | `verify/{{LAYER_REVIEWER}}` |
 
 Each implement agent edits at most its file cap per invocation ({{FILE_CAPS}}).

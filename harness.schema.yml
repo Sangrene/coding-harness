@@ -336,7 +336,7 @@ emit:
   # main agent needs when it edits inline (e.g. error-handling, i18n,
   # presentation-model). Each one costs context on every turn.
   always_on_skills: [<skill names>]
-  # Model override for read-only runner agents (gate, test-runner). Empty = inherit.
+  # Model override for read-only runner agents (the gate agent). Empty = inherit.
   runner_model: <optional>
   hooks:
     # SubagentStop hook: rejects a harness agent's final message that is not a

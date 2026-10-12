@@ -47,16 +47,14 @@ one turn when the dependency graph allows it — and never anywhere else.
   never off a receipt that isn't `STATUS: done` — it reads the *finished,
   verified* contract (exported type, call signature, return shape), not the
   planned one.
-- **Never dispatch `{{TEST_RUNNER}}` or `{{LAYER_REVIEWER}}` before
-  `{{GATE_AGENT}}` reports `STATUS: done`.**
-- **Always pair `{{TEST_RUNNER}}` + `{{LAYER_REVIEWER}}` in one turn** once the
-  gate passes — both are read-only and touch no shared file.
+- **Never dispatch `{{LAYER_REVIEWER}}` before `{{GATE_AGENT}}` reports
+  `STATUS: done`.** The gate agent runs the gate and the targeted tests, so
+  `done` means compiled and green.
 - **Never parallelize the implement chain** beyond the explicit pairs above, if
   any.
 
 ## Token note
 
 Parallel agents use independent context. Prefer parallel dispatch for the
-genuinely independent implement pairs and for the two read-only verify agents —
-never for anything that reads another agent's not-yet-written, or not-yet-green,
+genuinely independent implement pairs — never for anything that reads another agent's not-yet-written, or not-yet-green,
 file.

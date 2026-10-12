@@ -51,8 +51,8 @@ scout (read-only, alone)
     → [ independent layers ‖ ]
       → sequential layer chain, each self-tested red→green
         → wiring
-          → gate (compile/typecheck + boundary tests — blocking, sequential)
-            → [ test-runner ‖ layer-reviewer ]
+          → gate (compile/typecheck + targeted tests — blocking, sequential)
+            → layer-reviewer
 ```
 
 Everything that varies is a label in `harness.yml`: layer names, commands, error

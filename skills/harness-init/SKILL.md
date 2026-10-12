@@ -237,8 +237,7 @@ minus `<sfx>`. Target layout, single package (paths in the *target* repo):
 .claude/agents/plan/<planner, architecture-gate><sfx> only when plan.depth: full
 .claude/agents/implement/<agent><sfx>                 _layer-builder.md.tmpl + rule pack for its kind (every layer not kind: wiring)
 .claude/agents/implement/<wiring agent><sfx>          wiring-agent.md.tmpl (the kind: wiring layer; never for shape: library)
-.claude/agents/verify/<gate_name><sfx>                gate.md.tmpl
-.claude/agents/verify/test-runner<sfx>
+.claude/agents/verify/<gate_name><sfx>                gate.md.tmpl (gate + targeted tests)
 .claude/agents/verify/layer-reviewer<sfx>
 .claude/agents/<optional><sfx>                        per the emit table in templates/agents/optional-agents.md
 <verify.arch_tests.path>                              when arch_tests.status: generate
@@ -289,8 +288,8 @@ Per the schema's `workspace` section:
   cross-reference inside a package's files — `skills:` lists, `NEXT:`,
   forbidden-owner names, dispatch rows — uses the prefixed names.
 - **Shared, unprefixed:** `scout`, `feature-planner`, `architecture-gate`,
-  `layer-reviewer` and `test-runner` (`{{LAYER_REVIEWER}}` and
-  `{{TEST_RUNNER}}` render unprefixed). Their `skills:` frontmatter is one comma
+  and `layer-reviewer` (`{{LAYER_REVIEWER}}` renders
+  unprefixed). Their `skills:` frontmatter is one comma
   list holding every package's skill names (`api-architecture,
   web-architecture, …`); each reads the `<prefix>-*` skills of the package whose
   paths it is working on.

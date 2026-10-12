@@ -76,7 +76,7 @@ Apply mechanically, then list every inferred value for confirmation:
 | `state` ∥ `driven-adapter` with the state port in the adapter layer's `owns` | move the state-port glob to the state layer's `owns`, add it to the adapter layer's `forbidden` with the state agent as owner |
 | `testing.red_stub` one string, layers of different return shapes | the stack pack's §5 map form, only the shapes present; show which key each layer renders |
 | absent `emit.always_on_skills` | the skills the installed memory file `@`-imports, minus invariants and `architecture`; else propose per DETECTION Sweep 6 with the context cost |
-| absent `emit.runner_model` | the `model:` on the installed gate / test-runner agents, if not `inherit` |
+| absent `emit.runner_model` | the `model:` on the installed gate (or legacy test-runner) agents, if not `inherit` |
 | `emit.cursor_compat: true` with no `.cursor/rules/**` / `.cursor/agents/**` | propose `false`; ask |
 | `carry_forward` entries copied from a file the memory file `@`-imports | remove them; keep the import |
 | `verify.mechanical_checks` diff checks that grep the whole tree | rewrite over `$F` (changed files); add the stack pack's §14 checks the manifest lacks, run once against the exemplar |
@@ -85,9 +85,33 @@ Apply mechanically, then list every inferred value for confirmation:
 | absent `testing.red_stub`, `spy_technique`, `doubles.typed_as_port` | from the stack pack; `typed_as_port: true` |
 | absent `verify.arch_tests` | run harness-init DETECTION Sweep 5; propose `existing`, `generate` or `none` |
 | absent `emit.hooks.receipt_check` | `false` — offer it, opt-in, exactly as harness-init step 2.11 |
-| workspace with one root `implement-foundation`, prefixed `test-runner` / `layer-reviewer` | re-render per harness-init "Workspace rendering": `<prefix>-implement-foundation` per package; shared agents unprefixed with every package's skills in `skills:`; delete the old files only after confirmation |
+| workspace with one root `implement-foundation`, prefixed `layer-reviewer` | re-render per harness-init "Workspace rendering": `<prefix>-implement-foundation` per package; shared agents unprefixed with every package's skills in `skills:`; delete the old files only after confirmation |
 | `plan.spec.sync_agent` / `plan.spec.commit_format` (the spec-sync step was removed: the harness reads the spec only and never writes, commits or pushes it) | drop both fields. List an installed `.claude/agents/verify/spec-sync*` or `prd-sync*` agent for deletion and delete it only after the user confirms. The workflow graph, `parallel.md` and the memory file (dispatch row, standing-authorization sentence) re-render without the spec-sync step |
 | single package that is now a monorepo | offer workspace form; this is a re-detection, not a migration — run harness-init DETECTION Sweep 0–2 for the new packages |
+
+#### 2b. Re-validate against current detection rules — v2 manifests too
+
+Migration only renames fields. A manifest that is already v2 still carries
+every mistake the detection rules of its day allowed, and the re-render
+reproduces them faithfully. So, every upgrade, whatever the version:
+
+1. Run every **Manifest sanity** check from harness-doctor step 6 against the
+   manifest and the repo. In particular:
+   - each `parallel_with` pair owns the port it implements — move the state
+     port glob to the state agent (narrow the other agent with `excludes`);
+   - `plan.spec.enabled: true` while `plan.spec.path` does not exist in the
+     working tree (e.g. an uninitialised submodule) → propose `enabled: false`;
+   - `emit.always_on_skills` **absent** → propose the harness-init DETECTION
+     default (error-handling plus the enabled optional skills the main agent
+     edits inline) and show the context cost. An empty list `[]` is a choice
+     the user already made — leave it and do not ask again;
+   - kinds against the DETECTION kind-mapping table; `red_stub` shape map.
+2. Re-run the DETECTION rules that changed since the manifest's install, when
+   they are cheap and read-only (shared ports, import table, reviewer greps
+   from the stack pack). Propose additions; never drop a manifest value
+   without asking.
+3. Every proposed change is a line in the manifest diff below, marked
+   `re-validation`, with the rule that produced it. Each needs its own yes.
 
 Validate the migrated manifest against `harness.schema.yml`: every required
 field present, exactly one domain layer, ownership disjoint after excludes

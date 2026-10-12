@@ -27,7 +27,7 @@ Installer reference. Not emitted as a file.
      the prefix, so every `NEXT:` names a file that exists.
    - **Shared, unprefixed**: the scout (`{{SCOUT}}`), `feature-planner`,
      `architecture-gate`, the optional plan and spec agents,
-     `{{LAYER_REVIEWER}}` and `{{TEST_RUNNER}}`. Their frontmatter `skills:`
+     and `{{LAYER_REVIEWER}}`. Their frontmatter `skills:`
      lists every package's skill names, comma-separated (`{{ALL_ARCH_SKILLS}}`
      and siblings), so each package's skills preload.
    - In a root-level shared file (orchestrator skill, `parallel.md`, a shared
@@ -46,8 +46,7 @@ Installer reference. Not emitted as a file.
 | `implement/<agent>` | `implement/_layer-builder.md.tmpl` | once per `layers[]` entry whose `kind` is not `wiring` |
 | `implement/<agent>` | `implement/wiring-agent.md.tmpl` | the `layers[]` entry with `kind: wiring`. Never for `shape: library` — the consumer is the composition root |
 | `implement/test-author` | block below | some layer has `owns_tests: false` and the stack needs test bodies in a separate file |
-| `verify/<gate_name>` | `verify/gate.md.tmpl` | always |
-| `verify/test-runner` | `verify/test-runner.md.tmpl` | always |
+| `verify/<gate_name>` | `verify/gate.md.tmpl` (gate + targeted tests) | always |
 | `verify/layer-reviewer` | `verify/layer-reviewer.md.tmpl` | always |
 | `<package.path>/CLAUDE.md` | `PACKAGE-CLAUDE.md.tmpl` | once per package, `workspace.enabled: true` |
 | `skills/<optional skill>/SKILL.md` | `skills/optional/<name>/SKILL.md.tmpl` | its flag is on — see "Skill names" in `PLACEHOLDERS.md` |

@@ -15,7 +15,7 @@ Conventions:
   foundation skill, enabled per-package optional skills, every implement agent
   (layer builders, wiring, test-author) and the gate agent. Shared agents stay
   **unprefixed**: the scout, `feature-planner`, `architecture-gate`, the
-  optional plan/spec agents, `layer-reviewer` and `test-runner`; their
+  optional plan/spec agents, and `layer-reviewer`; their
   frontmatter `skills:` uses the `ALL_*_SKILLS` placeholders (every package's
   names, comma-joined). In `PACKAGE-CLAUDE.md.tmpl` and in every per-package
   file, every field renders from `workspace.packages[i]`. In shared root files
@@ -61,14 +61,14 @@ Conventions:
 
 | Placeholder | Source |
 |---|---|
-| `WORKDIR` | the directory every command is run from: `.` (repo root) when not a workspace; `packages[].path` for a per-package file. Not used in shared agents — `TEST_RUNNERS_TABLE` carries each package's working directory there |
+| `WORKDIR` | the directory every command is run from: `.` (repo root) when not a workspace; `packages[].path` for a per-package file. Not used in shared agents |
 | `GATE` *(formatted)* | `commands.gate` inline: `` `a`, then `b` `` |
 | `GATE_STEPS` | `commands.gate` as a numbered list, then `commands.arch_test` if set — the steps that run today, never a "once it exists" step |
 | `GATE_AGENT` | `commands.gate_name` |
 | `TEST_TARGETED` | `layers[].test_targeted` for the agent being rendered, else `commands.test_targeted` |
 | `TEST_TARGET_HINT` | `commands.test_target_hint` |
 | `TEST_ALL` | `commands.test_all` |
-| `TEST_RUNNERS_TABLE` | `testing.runners` + per-layer `test_targeted` overrides, as `\| Package \| Layers \| Working dir \| Targeted command \| Target hint \| Full suite \|`; one row per **distinct** (package, working dir, targeted command, hint, full suite) — layers sharing one are merged into the Layers cell, so an override equal to the default adds no row (workspace: every package, `Working dir` = `packages[].path`; otherwise the Package column is dropped and `Working dir` is `.`) |
+| `TEST_RUNNERS_TABLE` | `testing.runners` + per-layer `test_targeted` overrides, as `\| Package \| Layers \| Working dir \| Targeted command \| Target hint \| Full suite \|`; one row per **distinct** (package, working dir, targeted command, hint, full suite) — layers sharing one are merged into the Layers cell, so an override equal to the default adds no row (workspace: every package in the shared testing skill, `Working dir` = `packages[].path`; in a per-package gate agent only that package's rows, Package column dropped; otherwise the Package column is dropped and `Working dir` is `.`) |
 | `COMMAND_RULES` | `commands.*` (except `gate`/`arch_test`, which render through `GATE_STEPS`) + `commands.hygiene`, as the memory file's command section |
 | `HYGIENE_LINES`, `HYGIENE_SHORT` | `commands.hygiene` — full list / one-line form |
 
@@ -166,7 +166,7 @@ written from (the orchestrator never opens the files):
 | `SCOUT_NEXT` | the scout's successor in the graph: `feature-planner` when `plan.depth: full`; otherwise `DOMAIN_AGENT` + ` (or <layers depending on it, joined with " ∥ "> if no new type, rule or error kind)` |
 | `WIRING_AGENT` | the layer with `kind: wiring` |
 | `SCOUT` | `plan.scout_name` — shared, never prefixed |
-| `TEST_RUNNER`, `LAYER_REVIEWER` | `test-runner`, `layer-reviewer` — shared, never prefixed |
+| `LAYER_REVIEWER` | `layer-reviewer` — shared, never prefixed |
 | `TEST_AUTHOR` | `test-author`; `<prefix>-test-author` per package in workspace mode |
 | `FOUNDATION_SKILL` | `implement-foundation`, or `<prefix>-implement-foundation` per package |
 | `ARCH_SKILL`, `TESTING_SKILL`, `ERRORS_SKILL` | `architecture`, `testing`, `error-handling`; `<prefix>-…` per package in workspace mode |
