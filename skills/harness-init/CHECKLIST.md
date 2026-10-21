@@ -211,9 +211,8 @@ names and the package's commands from its `{{WORKDIR}}` (the package path).
       not silently changed.
 - [ ] `carry_forward` rules are quoted, not paraphrased, and none of them
       comes from a file the memory file `@`-imports.
-- [ ] Every `emit.always_on_skills` entry is `@`-imported in the memory file
-      and exists under `.claude/skills/`; `emit.cursor_compat: true` only if the
-      user confirmed Cursor use.
+- [ ] No memory file (root or package) `@`-imports a skill;
+      `emit.cursor_compat: true` only if the user confirmed Cursor use.
 - [ ] Architecture slots are filled from the repo: `IMPORT_TABLE` rows match
       the exemplar's imports; every `SHARED_PORTS_TABLE` port, real
       implementation and fake exists at its path; every `REFERENCE_SLICES`

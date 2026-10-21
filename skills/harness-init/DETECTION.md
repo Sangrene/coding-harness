@@ -422,14 +422,13 @@ wrong; fix it before it ships. Record each with `scope: diff` (it runs over
 | `plan.spec.*` | a PRD / spec file, especially a submodule; its path. The spec is read-only to the harness — nothing emitted writes, commits or pushes it. **Enable only when the file exists in the working tree.** A submodule that is declared in `.gitmodules` but not initialised (empty directory) means `enabled: false` by default: say so at confirm, show the init command, and never run it during detection. An agent whose file is absent is a trap |
 | `plan.depth` | `full` over ~30k LOC or with a spec; else `single` |
 | `emit.cursor_compat` | **default `false`.** Propose `true` only when `.cursor/` is actually used for agents — `.cursor/rules/**` or `.cursor/agents/**` present — **and** the user confirms they run these agents in Cursor. A bare `.cursor/` (settings, MCP config) is not enough: `true` adds a Startup section to every agent that re-reads preloaded skills |
-| `emit.always_on_skills` | propose `error-handling` plus every enabled optional skill the main agent edits inline: `i18n`, `presentation-model`, and `component-design` for frontends. An old harness's `@`-imports (Sweep 7) are a strong signal. Show the context cost at confirm: line count of each rendered skill, summed, loaded on every turn |
 | `emit.runner_model` | an existing harness's gate (runner) agents with a `model:` override other than `inherit` → carry it. Else empty |
 
 ---
 
 ## Sweep 7 — an existing harness (when target `.claude/` exists)
 
-Fills `emit.runner_model`, `emit.always_on_skills`
+Fills `emit.runner_model`
 hints, extra `verify.mechanical_checks`, and the **lost-rules inventory** the
 confirm step needs. Read-only.
 
@@ -443,9 +442,8 @@ confirm step needs. Read-only.
 4. **Spec writers.** An old agent that writes, commits or pushes the spec / PRD
    is not carried: list it in the lost-rules inventory as **dropped** (the
    harness reads the spec only) and remove it only with the user's consent.
-5. **Always-on.** Skills the old memory file `@`-imports → proposed
-   `emit.always_on_skills` (minus invariants and `architecture`, which are
-   always included).
+5. **Skill imports.** Skills the old memory file `@`-imports are not carried;
+   the new memory file links them instead.
 6. **Reviewer greps.** Every grep / rg line in the old reviewer → a
    `verify.mechanical_checks` entry (generalised to the repo's real paths), so
    no mechanical check is lost.

@@ -38,10 +38,8 @@ Conventions:
 | `CURSOR_FLAGS` | `emit.cursor_compat` — empty when false |
 | `CURSOR_STARTUP` | `emit.cursor_compat: true` → one line, then a blank line: ``**Cursor** ignores `skills:` — read first: `<path>`, `<path>` …`` with the `.claude/skills/<name>/SKILL.md` path of every skill in this agent's `skills:`. Nothing else — no restated skill content. Empty (line removed) when false |
 | `REPO_IMPORTS` | one `@<path relative to the memory file>` line per repo instruction file the memory file imports (`AGENTS.md` when it exists and is not the memory file); empty otherwise. Rules in these files are never copied into `CARRY_FORWARD` |
-| `ALWAYS_ON_IMPORTS` | one `@{{SKILLS_IMPORT_PREFIX}}<name>/SKILL.md` line each: the four invariants (`hexagonal-architecture`, `tdd`, `separation-of-concerns`, `extract-til-you-drop`), `ARCH_SKILL`, then `emit.always_on_skills` by rendered name. Workspace mode: invariants only |
-| `PACKAGE_ALWAYS_ON_IMPORTS` | `PACKAGE-CLAUDE.md.tmpl`: one `@{{PACKAGE_SKILLS_PREFIX}}<name>/SKILL.md` line each — the package's `ARCH_SKILL`, then its `emit.always_on_skills` entries, prefixed |
 | `RUNNER_MODEL_LINE` | `emit.runner_model` as `model: <x>` plus newline, or empty |
-| `SKILL_INDEX` | `skills.filled` + enabled `skills.optional` (names per "Skill names" below), one linked line each — minus every skill already in `ALWAYS_ON_IMPORTS` |
+| `SKILL_INDEX` | `skills.filled` + enabled `skills.optional` (names per "Skill names" below), one linked line each — minus the four invariants and `ARCH_SKILL`, which the template lists itself |
 | `CARRY_FORWARD` | `carry_forward`, quoted verbatim, one bullet each — only rules from files the memory file does not import (`REPO_IMPORTS`) and that `COMMAND_RULES` does not already state; section dropped when empty |
 | `DEV_RUN` | `dev_run.*`; section dropped when empty |
 | `EXTRA_SECTIONS` | spec and optional-skill sections |

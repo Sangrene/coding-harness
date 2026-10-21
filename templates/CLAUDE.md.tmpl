@@ -51,16 +51,11 @@ implement round):
 
 ## Skills
 
-Always on, every task, no exceptions — imported so they load with this file:
+Apply on every task, no exceptions. Load each skill on demand (by name or
+link); this file never `@`-imports a skill, so none loads into context
+automatically:
 
-<!-- harness: {{ALWAYS_ON_IMPORTS}} renders one
-     `@{{SKILLS_IMPORT_PREFIX}}<skill>/SKILL.md` line each, in this order:
-     hexagonal-architecture, tdd, separation-of-concerns, extract-til-you-drop,
-     {{ARCH_SKILL}}, then every emit.always_on_skills entry by its rendered
-     name. Workspace mode: omit {{ARCH_SKILL}} and per-package skills; each
-     package's CLAUDE.md imports its own. -->
-{{ALWAYS_ON_IMPORTS}}
-
+<!-- harness: never render an `@` import of a skill in this file. -->
 - `hexagonal-architecture` — dependencies point inward; the domain references
   no framework; adapters translate and classify; adapters are constructed only
   at the composition root. **This is fixed, not a preference.**
@@ -71,8 +66,8 @@ Always on, every task, no exceptions — imported so they load with this file:
 - `extract-til-you-drop` — decompose every function until no further
   intention-revealing extraction remains. New code, not just refactors.
 
-Project-specific, loaded by the agents that need them (always-on ones above are
-not repeated):
+Project-specific, loaded by the agents that need them (the ones above are not
+repeated):
 
 {{SKILL_INDEX}}
 

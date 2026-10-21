@@ -75,7 +75,7 @@ Apply mechanically, then list every inferred value for confirmation:
 | a view-model / presenter layer with `kind: driving-adapter` | `kind: presentation` |
 | `state` ∥ `driven-adapter` with the state port in the adapter layer's `owns` | move the state-port glob to the state layer's `owns`, add it to the adapter layer's `forbidden` with the state agent as owner |
 | `testing.red_stub` one string, layers of different return shapes | the stack pack's §5 map form, only the shapes present; show which key each layer renders |
-| absent `emit.always_on_skills` | the skills the installed memory file `@`-imports, minus invariants and `architecture`; else propose per DETECTION Sweep 6 with the context cost |
+| `emit.always_on_skills` present, or `@`-imports of skills in the installed memory file | remove the field and the imports; the memory file links skills instead. Tell the user |
 | absent `emit.runner_model` | the `model:` on the installed gate (or legacy test-runner) agents, if not `inherit` |
 | `emit.cursor_compat: true` with no `.cursor/rules/**` / `.cursor/agents/**` | propose `false`; ask |
 | `carry_forward` entries copied from a file the memory file `@`-imports | remove them; keep the import |
@@ -101,10 +101,6 @@ reproduces them faithfully. So, every upgrade, whatever the version:
      port glob to the state agent (narrow the other agent with `excludes`);
    - `plan.spec.enabled: true` while `plan.spec.path` does not exist in the
      working tree (e.g. an uninitialised submodule) → propose `enabled: false`;
-   - `emit.always_on_skills` **absent** → propose the harness-init DETECTION
-     default (error-handling plus the enabled optional skills the main agent
-     edits inline) and show the context cost. An empty list `[]` is a choice
-     the user already made — leave it and do not ask again;
    - kinds against the DETECTION kind-mapping table; `red_stub` shape map.
 2. Re-run the DETECTION rules that changed since the manifest's install, when
    they are cheap and read-only (shared ports, import table, reviewer greps

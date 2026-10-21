@@ -81,7 +81,8 @@ Run each; record pass / fail with the evidence (path, line, glob).
      own `owns` (state port with the state agent);
    - `layer-reviewer` diff-scoped checks run over `$F`, not the whole tree;
    - `carry_forward` holds no rule from a file the memory file `@`-imports;
-     every `emit.always_on_skills` entry is `@`-imported and exists;
+     the memory files (root and per-package) contain no `@` import of a skill
+     (`@...skills/...SKILL.md`) → fail: remove it, link instead;
    - a leftover `.claude/agents/**/spec-sync*` or `prd-sync*` agent, a
      `plan.spec.sync_agent` / `commit_format` field, or a graph / dispatch row
      naming spec-sync → fail: the harness never writes the spec; run

@@ -180,15 +180,13 @@ Show the user the draft `harness.yml` and, in plain prose:
       Then diff the old and the draft new file sets: every old agent / skill
       file is either re-rendered, absorbed (name where), or removed with
       consent;
-    - carried values: `emit.runner_model` (ask if two old files disagree),
-      proposed `emit.always_on_skills`.
+    - carried values: `emit.runner_model` (ask if two old files disagree).
 13. **Kinds checked** against the DETECTION kind-mapping table: components are
     `view`, view-models `presentation`, transports `driving-adapter`; and, for
     parallel `state` ∥ `driven-adapter` layers, the state port owned by the
     state agent.
 14. **Memory-file context cost**: `@`-imports kept (e.g. `@AGENTS.md`, not
-    copied into `carry_forward`), the always-on skills with their line counts
-    and total, and `emit.cursor_compat` (default `false`; `true` only if the
+    copied into `carry_forward`; never a skill), and `emit.cursor_compat` (default `false`; `true` only if the
     user confirms they run the agents from Cursor).
 
 Ask about anything detection could not settle — in particular which pattern is
@@ -328,7 +326,7 @@ Per the schema's `workspace` section:
 - **Rule packs, not repetition.** Each implement agent gets the rule pack for
   its `kind` from `rule-packs.md`, then its own `rules:`. Do not copy pack rules
   into `rules:`.
-- **Per-layer `skills:` lists extras only.** The always-on set comes through
+- **Per-layer `skills:` lists extras only.** The base set comes through
   `implement-foundation`.
 - **Every example is from the target repo.** One borrowed path, type or command
   teaches the agent the wrong vocabulary.

@@ -224,7 +224,7 @@ layers:
     depends_on: [<agent names>]          # [] for the domain layer
     parallel_with: [<agent names>]       # only for genuinely disjoint files
     optional: true | false               # e.g. a state layer when no state is shared
-    # EXTRA skills only. Every implement agent already gets the always-on set
+    # EXTRA skills only. Every implement agent already gets the base set
     # (implement-foundation, hexagonal-architecture, tdd, separation-of-concerns,
     # extract-til-you-drop, architecture) — never list those here.
     skills: [<extra skill names>]
@@ -330,12 +330,6 @@ emit:
   # .claude/CLAUDE.md when the root file is owned by a framework generator.
   memory_file: "CLAUDE.md" | ".claude/CLAUDE.md"
   standing_authorization: true | false  # let the orchestrator spawn without asking
-  # Skills @-imported into the memory file, so they load on every turn,
-  # including small inline edits the orchestrator keeps for itself. The four
-  # invariants and `architecture` are always included; list the extras the
-  # main agent needs when it edits inline (e.g. error-handling, i18n,
-  # presentation-model). Each one costs context on every turn.
-  always_on_skills: [<skill names>]
   # Model override for read-only runner agents (the gate agent). Empty = inherit.
   runner_model: <optional>
   hooks:
