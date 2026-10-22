@@ -3,7 +3,7 @@
 # layout (src/screens, src/components, Expo Router in src/app), the platform
 # and the test runners: vitest for everything pure, jest-expo + RNTL for
 # view-model hooks, routed by suffix in scripts/test.ts.
-harness_version: 2
+harness_version: 3
 
 project:
   name: acme-mobile
@@ -33,7 +33,7 @@ commands:
     - "Never create or edit ios/ or android/ by hand — they are generated (CNG); configure app.json and config plugins."
     - "Test runs can exceed a minute — always wait for exit."
 
-# From AGENTS.md (root), which .claude/CLAUDE.md imports.
+# From AGENTS.md (root), which .agents/AGENTS.md imports (`@../AGENTS.md`).
 carry_forward:
   - "Expo ships breaking changes every SDK release. Before touching an Expo, EAS or React Native API: read the major version of `expo` in package.json, fetch https://docs.expo.dev/versions/v<major>.0.0/, and for anything else follow https://docs.expo.dev/llms.txt — never answer from memory."
   - "Use Expo Router for all navigation. Routes live in src/app/; keep non-route code outside it."
@@ -304,9 +304,9 @@ skills:
     spec_implement: false
 
 emit:
-  cursor_compat: false
+  adapters: { claude: true, cursor: false }
   agent_suffix: ".md"
-  memory_file: ".claude/CLAUDE.md"
+  memory_file: ".agents/AGENTS.md"
   standing_authorization: true
   runner_model: ""
   hooks:

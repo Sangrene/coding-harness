@@ -6,7 +6,7 @@ Source material: three working harnesses — a Next.js/Apollo web app
 monolith (Rust + Axum + sqlx). Below they are called the *Next.js app*, the
 *React Router app* and the *Rust service*.
 
-The three `.claude/` directories are the **same machine with different labels**.
+The three `.claude/` directories of the source harnesses are the **same machine with different labels**.
 This document separates the machine (invariant) from the labels (per-repo).
 
 ---
@@ -19,7 +19,7 @@ every generated harness.
 ### 1.1 Phase-folder layout
 
 ```
-.claude/agents/
+.agents/agents/
   plan/       read-only: scope, audit, blast radius, checklist, boundary gate
   implement/  one agent per architectural layer, each owning a disjoint file set
   verify/     read-only: gate (compile/typecheck + targeted tests), boundary reviewer
@@ -278,7 +278,7 @@ placeholders in `templates/` and the fields in `harness.yml`.
 Given a target repo, `skills/harness-init/SKILL.md` runs detection
 (`DETECTION.md`, guided by the matching `stacks/<id>.md` pack), writes a
 `harness.yml` for the user to confirm, then renders `templates/` into the repo's
-`.claude/` per `templates/PLACEHOLDERS.md`, and verifies the result against
+`.agents/` per `templates/PLACEHOLDERS.md`, and verifies the result against
 `CHECKLIST.md`.
 
 The generated harness is **not** a copy of any source repo. It is the invariant

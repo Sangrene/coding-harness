@@ -4,7 +4,7 @@
 # (the consumer's code calls in) and no composition root (the consumer builds
 # the limiter and injects the clock and store). Scaling removes roles; it does
 # not relax the dependency rule for the ones that remain.
-harness_version: 2
+harness_version: 3
 
 project:
   name: bucketeer
@@ -174,9 +174,9 @@ skills:
     spec_implement: false
 
 emit:
-  cursor_compat: false
+  adapters: { claude: true, cursor: false }
   agent_suffix: ".md"
-  memory_file: "CLAUDE.md"
+  memory_file: "AGENTS.md"
   standing_authorization: true
   runner_model: ""
   hooks:

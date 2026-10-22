@@ -17,7 +17,7 @@ Conventions:
   **unprefixed**: the scout, `feature-planner`, `architecture-gate`, the
   optional plan/spec agents, and `layer-reviewer`; their
   frontmatter `skills:` uses the `ALL_*_SKILLS` placeholders (every package's
-  names, comma-joined). In `PACKAGE-CLAUDE.md.tmpl` and in every per-package
+  names, comma-joined). In `PACKAGE-AGENTS.md.tmpl` and in every per-package
   file, every field renders from `workspace.packages[i]`. In shared root files
   and shared agents' bodies, a per-package value renders as a slash-joined list.
 - **Invariant skills take no placeholders.** `hexagonal-architecture`,
@@ -34,10 +34,11 @@ Conventions:
 | `PROJECT_NAME`, `PROJECT_SUMMARY` | `project.name`, `project.summary` |
 | `DOMAIN_WORD` | what this repo calls a business area (domain, module, bounded context) — from `architecture` vocabulary |
 | `MEMORY_FILE` | `emit.memory_file` |
-| `SKILLS_IMPORT_PREFIX` | `.claude/skills/` when the memory file is root `CLAUDE.md`; `skills/` when it is `.claude/CLAUDE.md` |
-| `CURSOR_FLAGS` | `emit.cursor_compat` — empty when false |
-| `CURSOR_STARTUP` | `emit.cursor_compat: true` → one line, then a blank line: ``**Cursor** ignores `skills:` — read first: `<path>`, `<path>` …`` with the `.claude/skills/<name>/SKILL.md` path of every skill in this agent's `skills:`. Nothing else — no restated skill content. Empty (line removed) when false |
-| `REPO_IMPORTS` | one `@<path relative to the memory file>` line per repo instruction file the memory file imports (`AGENTS.md` when it exists and is not the memory file); empty otherwise. Rules in these files are never copied into `CARRY_FORWARD` |
+| `MEMORY_FILE_IMPORT` | adapter `claude` only: the `@` target in `CLAUDE.md` — `emit.memory_file` relative to the repo root (`AGENTS.md` / `.agents/AGENTS.md`); in a per-package `CLAUDE.md`, `AGENTS.md` |
+| `SKILLS_IMPORT_PREFIX` | `.agents/skills/` when the memory file is root `AGENTS.md`; `skills/` when it is `.agents/AGENTS.md` |
+| `CURSOR_FLAGS` | `emit.adapters.cursor` — empty when false |
+| `CURSOR_STARTUP` | `emit.adapters.cursor: true` → one line, then a blank line: ``**Cursor** ignores `skills:` — read first: `<path>`, `<path>` …`` with the `.agents/skills/<name>/SKILL.md` path of every skill in this agent's `skills:`. Nothing else — no restated skill content. Empty (line removed) when false |
+| `REPO_IMPORTS` | `@../AGENTS.md` when `emit.memory_file` is `.agents/AGENTS.md` and a root `AGENTS.md` exists (owned by something else); empty otherwise. Rules in these files are never copied into `CARRY_FORWARD` |
 | `RUNNER_MODEL_LINE` | `emit.runner_model` as `model: <x>` plus newline, or empty |
 | `SKILL_INDEX` | `skills.filled` + enabled `skills.optional` (names per "Skill names" below), one linked line each — minus the four invariants and `ARCH_SKILL`, which the template lists itself |
 | `CARRY_FORWARD` | `carry_forward`, quoted verbatim, one bullet each — only rules from files the memory file does not import (`REPO_IMPORTS`) and that `COMMAND_RULES` does not already state; section dropped when empty |
@@ -45,13 +46,13 @@ Conventions:
 | `EXTRA_SECTIONS` | spec and optional-skill sections |
 | `WORKSPACE_SECTION` | `workspace.packages` (package map, path → package routing) + `workspace.contracts`; empty when not a workspace |
 
-## Workspace package memory file (`PACKAGE-CLAUDE.md.tmpl`)
+## Workspace package memory file (`PACKAGE-AGENTS.md.tmpl`)
 
 | Placeholder | Source |
 |---|---|
 | `PACKAGE_NAME`, `PACKAGE_PATH` | `packages[].name`, `packages[].path` |
 | `PACKAGE_SUMMARY`, `PACKAGE_STACK` | `packages[].project.summary`, `packages[].project.stack` |
-| `PACKAGE_SKILLS_PREFIX` | relative path from `packages[].path` to `.claude/skills/` |
+| `PACKAGE_SKILLS_PREFIX` | relative path from `packages[].path` to `.agents/skills/` |
 | `PACKAGE_SKILL_INDEX` | `packages[].skills.optional`, one linked line per enabled skill, prefixed names |
 | `PACKAGE_CONTRACTS` | `workspace.contracts` this package owns or consumes |
 

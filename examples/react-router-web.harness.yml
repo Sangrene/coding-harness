@@ -9,10 +9,10 @@
 # `<domain>.model.ts`, anemic domain, store interface owned by the MobX file).
 # The repo's migration doc closed all of them: no
 # `<domain>.repository.ts` or `<domain>.model.ts` remains, and every
-# detection command prints nothing. The repo's own CLAUDE.md touch-area table,
+# detection command prints nothing. The repo's own agent-instructions touch-area table,
 # clean-architecture "Known deviations" and typecheck-guard still name those
 # legacy files — a regenerated harness drops them.
-harness_version: 2
+harness_version: 3
 
 project:
   name: acme-web
@@ -350,9 +350,9 @@ skills:
     spec_implement: false
 
 emit:
-  cursor_compat: false
+  adapters: { claude: true, cursor: false }
   agent_suffix: ".md"
-  memory_file: ".claude/CLAUDE.md"
+  memory_file: ".agents/AGENTS.md"
   standing_authorization: true
   runner_model: ""
   hooks:

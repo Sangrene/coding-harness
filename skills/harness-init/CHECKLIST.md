@@ -17,7 +17,7 @@ names and the package's commands from its `{{WORKDIR}}` (the package path).
       Handlebars and Jinja, so match the harness's placeholder form only:
 
       ```sh
-      grep -rnE '\{\{[A-Z][A-Z0-9_]*\}\}' .claude/ <memory_file> <package>/CLAUDE.md
+      grep -rnE '\{\{[A-Z][A-Z0-9_]*\}\}' .agents/ <memory_file> <package>/AGENTS.md
       ```
 
       Expect no output.
@@ -25,14 +25,14 @@ names and the package's commands from its `{{WORKDIR}}` (the package path).
       comments for the renderer; none belong in the output:
 
       ```sh
-      grep -rn '<!-- harness:' .claude/ <memory_file> <package>/CLAUDE.md
+      grep -rn '<!-- harness:' .agents/ <memory_file> <package>/AGENTS.md CLAUDE.md
       ```
 
       Expect no output.
 - [ ] **Frontmatter is line 1.** Every agent and skill file starts with `---`:
 
       ```sh
-      find .claude/agents .claude/skills -name '*.md' \( -path '*/agents/*' -o -name SKILL.md \) \
+      find .agents/agents .agents/skills -name '*.md' \( -path '*/agents/*' -o -name SKILL.md \) \
         -exec sh -c 'head -n 1 "$1" | grep -qx -- "---" || echo "$1"' _ {} \;
       ```
 
@@ -43,9 +43,9 @@ names and the package's commands from its `{{WORKDIR}}` (the package path).
       `scout`, `feature-planner`, `architecture-gate` and `layer-reviewer` are
       unprefixed.
 - [ ] Every `skills:` entry in an agent's frontmatter names a directory under
-      `.claude/skills/` with a `SKILL.md`. `implement-foundation` resolves at
-      `.claude/skills/implement-foundation/` — in workspace mode
-      `.claude/skills/<prefix>-implement-foundation/`, one per package, beside
+      `.agents/skills/` with a `SKILL.md`. `implement-foundation` resolves at
+      `.agents/skills/implement-foundation/` — in workspace mode
+      `.agents/skills/<prefix>-implement-foundation/`, one per package, beside
       `<prefix>-architecture`, `<prefix>-testing`, `<prefix>-error-handling`.
 - [ ] **Workspace shared agents list every package.** Each shared agent's
       `skills:` frontmatter is a single comma list naming every package's
@@ -90,10 +90,15 @@ names and the package's commands from its `{{WORKDIR}}` (the package path).
 - [ ] **Arch tests run** when `verify.arch_tests.status` is `existing` or
       `generate`. *Runs project code.* `commands.arch_test` exits 0, and the gate
       agent's body runs it after the compile gate.
+- [ ] **Adapters are pointers.** *(per enabled adapter)* `claude`: `CLAUDE.md`
+      (root and per package) is exactly one `@<memory file>` line; `.claude/skills`
+      and `.claude/agents` are relative symlinks that resolve into `.agents/`
+      (`test -L`, `readlink`); no file under `.claude/` other than `settings*.json`
+      is a regular file with harness content. Expect no second copy of any rule.
 - [ ] **Receipt hook works** when `emit.hooks.receipt_check: true`:
-      - `.claude/hooks/receipt-check.sh` is byte-identical to the template and
+      - `.agents/hooks/receipt-check.sh` is byte-identical to the template and
         executable (`test -x`);
-      - `.claude/settings.json` parses (`jq . .claude/settings.json`), still has
+      - *(adapter `claude`)* `.claude/settings.json` parses (`jq . .claude/settings.json`), still has
         every key it had before, and has exactly one `SubagentStop` group running
         the script;
       - the matcher regex matches every emitted agent `name` (not file name, so
@@ -101,7 +106,7 @@ names and the package's commands from its `{{WORKDIR}}` (the package path).
       - piping a sample receipt allows, and a broken one blocks:
 
       ```sh
-      H=.claude/hooks/receipt-check.sh
+      H=.agents/hooks/receipt-check.sh
       ok='{"agent_type":"<tdd-agent>","stop_hook_active":false,"last_assistant_message":"STATUS: done\nSCOPE: <tdd-agent>\nFILES: a\nOUTCOME: red: 1 failing; green: 1 passing\nBLOCKERS:\nNEXT: <gate>"}'
       printf '%s' "$ok" | "$H" --tdd <tdd-agents>                         # expect no output
       printf '%s' "$ok" | sed 's/red: 1 failing; //' | "$H" --tdd <tdd-agents>  # expect {"decision":"block",...}
@@ -124,20 +129,20 @@ names and the package's commands from its `{{WORKDIR}}` (the package path).
       `scope: diff` check runs over `$F` (the changed-file list), never over
       `src` / the whole tree; every `scope: repo` check is labelled repo-wide.
 
-## Lost rules (only when a `.claude/` existed before)
+## Lost rules (only when a harness or memory file existed before)
 
 - [ ] **Every old rule has a home.** For each rule in the pre-install
-      `.claude/` (agents, skills, memory file — one bullet, table row,
-      checklist item or trap each), name the v2 file that carries it, or show
+      `.agents/` and `.claude/` (agents, skills, memory files — one bullet, table row,
+      checklist item or trap each), name the v3 file that carries it, or show
       the user's explicit consent to drop it. Report as a table:
-      `old file:line → v2 file (slot / manifest field) | dropped (consented)`.
+      `old file:line → v3 file (slot / manifest field) | dropped (consented)`.
       An unmapped rule is a fail.
 - [ ] **Every old mechanical check survives.** Each grep / rg line in the old
       reviewer appears in `verify.mechanical_checks` (path-generalised) or is
       in the consented drop list.
 - [ ] **Old files are accounted for.** Every old agent / skill file is
       re-rendered, absorbed (named target), or removed with consent; nothing
-      else under `.claude/` was deleted.
+      else under `.agents/` was deleted.
 - [ ] Carried values match the old harness: runner agents' `model:` →
       `emit.runner_model`.
 - [ ] Nothing emitted writes, commits or pushes the spec: no agent other
@@ -191,7 +196,7 @@ names and the package's commands from its `{{WORKDIR}}` (the package path).
       agree.
 - [ ] The memory file's touch-area table covers every layer glob. In workspace
       mode the root routing table covers every package path, and each
-      `<package>/CLAUDE.md` covers that package's layers.
+      `<package>/AGENTS.md` covers that package's layers.
 - [ ] Gate (which also runs the targeted tests) and layer-reviewer are read-only in their tool lists and
       say so in their bodies.
 - [ ] No settings change other than the opted-in receipt hook; no ownership
@@ -212,7 +217,7 @@ names and the package's commands from its `{{WORKDIR}}` (the package path).
 - [ ] `carry_forward` rules are quoted, not paraphrased, and none of them
       comes from a file the memory file `@`-imports.
 - [ ] No memory file (root or package) `@`-imports a skill;
-      `emit.cursor_compat: true` only if the user confirmed Cursor use.
+      `emit.adapters.cursor: true` only if the user confirmed Cursor use.
 - [ ] Architecture slots are filled from the repo: `IMPORT_TABLE` rows match
       the exemplar's imports; every `SHARED_PORTS_TABLE` port, real
       implementation and fake exists at its path; every `REFERENCE_SLICES`

@@ -1,8 +1,8 @@
 <!-- harness: workspace mode only. Rendered once per workspace.packages[] entry
-     to <package.path>/CLAUDE.md, with that package's values. Claude Code loads
-     it when an agent works under that path. `@` imports and links resolve
+     to <package.path>/AGENTS.md, with that package's values. Agents load
+     it when they work under that path. `@` imports and links resolve
      relative to this file: {{PACKAGE_SKILLS_PREFIX}} is the relative path from
-     <package.path> to the root .claude/skills/ (e.g. `../../.claude/skills/`).
+     <package.path> to the root .agents/skills/ (e.g. `../../.agents/skills/`).
      Agent names render prefixed: `<prefix>-<agent>`. A section marked "drop
      when" is removed whole, heading included. Strip every harness comment at
      render. -->
@@ -10,7 +10,7 @@
 
 {{PACKAGE_SUMMARY}} ({{PACKAGE_STACK}})
 
-This package is its own hexagon with its own chain. The root `CLAUDE.md` holds
+This package is its own hexagon with its own chain. The root memory file holds
 the workspace map and the rules shared by every package.
 
 <!-- harness: drop the next paragraph when this package's conformance.level is

@@ -7,7 +7,7 @@
 #     exactly one domain layer; today the model type is written by the agent
 #     that also writes the Apollo adapter.
 #   - agent files use the `.agent.md` suffix, as the repo already does.
-harness_version: 2
+harness_version: 3
 
 project:
   name: acme-console
@@ -268,9 +268,9 @@ skills:
     spec_implement: false
 
 emit:
-  cursor_compat: false
+  adapters: { claude: true, cursor: false }
   agent_suffix: ".agent.md"
-  memory_file: ".claude/CLAUDE.md"   # root CLAUDE.md is `@AGENTS.md`, owned by next dev
+  memory_file: ".agents/AGENTS.md"   # root AGENTS.md is owned by next dev
   standing_authorization: false
   runner_model: ""
   hooks:

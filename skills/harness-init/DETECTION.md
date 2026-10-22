@@ -98,28 +98,30 @@ token(s) the schema defines:
 exit rule for anything slow. Add the working directory per package in workspace
 mode.
 
-**Carry forward.** Read `CLAUDE.md`, `AGENTS.md`, `.cursor/rules/**`,
+**Carry forward.** Read `AGENTS.md`, `CLAUDE.md`, `.cursor/rules/**`,
 `.cursorrules`, `.github/copilot-instructions.md`, `.github/instructions/**`,
 `CONTRIBUTING.md`, README dev sections. Quote every rule that tells an agent or
 contributor what to do; do not paraphrase; drop only rules the harness itself
 supersedes (and list those at confirm).
 
 **Imported files are not carried, they are imported.** If the memory file
-`@`-imports a file (`@AGENTS.md`, `@docs/agents.md`), its rules already load
+`@`-imports a file (`@docs/agents.md`), its rules already load
 every turn: do **not** copy them into `carry_forward` — the copy doubles the
 context cost and drifts (a v1 trial copied `eas build` while the imported file
 said `bunx eas-cli`). Keep the `@`-import line in the rendered memory file
-instead. When `AGENTS.md` exists and is not imported, prefer adding the
-`@AGENTS.md` import over copying its rules; ask at confirm. Only rules from
-files that are **not** imported go into `carry_forward`.
+instead. A hand-written root `AGENTS.md` is the harness's own memory file
+(`emit.memory_file: AGENTS.md`): its rules are carried into the rendered file
+(lost-rules check at confirm), never left in a second copy. A hand-written
+`CLAUDE.md` is the same, then becomes a one-line `@AGENTS.md` import. Only rules
+from files that are **not** imported go into `carry_forward`.
 
 **Cache rule (→ `CACHE_RULE`).** From the pack's §4 / §13: the flag that makes
 the targeted run uncached (`go test -count=1`, Gradle `--rerun`), or "none of
 this stack's runners cache results" when the pack says so.
 
-**Generated memory file.** If a root `CLAUDE.md` / `AGENTS.md` is rewritten by a
-framework or dev server, set `emit.memory_file: .claude/CLAUDE.md` and leave the
-generated file alone.
+**Generated memory file.** If a root `AGENTS.md` is rewritten by a
+framework or dev server, set `emit.memory_file: .agents/AGENTS.md`, leave the
+generated file alone and let the memory file import it (`@../AGENTS.md`).
 
 **Dev run.** The documented local-run command, a fakes / in-memory flag if one
 exists, and seeded fake logins only if the repo already documents them. Never
@@ -421,20 +423,24 @@ wrong; fix it before it ships. Record each with `scope: diff` (it runs over
 | `plan.impact_scout` | a `.codegraph/` directory |
 | `plan.spec.*` | a PRD / spec file, especially a submodule; its path. The spec is read-only to the harness — nothing emitted writes, commits or pushes it. **Enable only when the file exists in the working tree.** A submodule that is declared in `.gitmodules` but not initialised (empty directory) means `enabled: false` by default: say so at confirm, show the init command, and never run it during detection. An agent whose file is absent is a trap |
 | `plan.depth` | `full` over ~30k LOC or with a spec; else `single` |
-| `emit.cursor_compat` | **default `false`.** Propose `true` only when `.cursor/` is actually used for agents — `.cursor/rules/**` or `.cursor/agents/**` present — **and** the user confirms they run these agents in Cursor. A bare `.cursor/` (settings, MCP config) is not enough: `true` adds a Startup section to every agent that re-reads preloaded skills |
+| `emit.adapters.cursor` | **default `false`.** Propose `true` only when `.cursor/` is actually used for agents — `.cursor/rules/**` or `.cursor/agents/**` present — **and** the user confirms they run these agents in Cursor. A bare `.cursor/` (settings, MCP config) is not enough: `true` adds a Startup section to every agent that re-reads preloaded skills |
+| `emit.adapters.claude` | **default `true`** when `CLAUDE.md` or `.claude/` exists in the target, else ask. A tool-specific directory in the target is the signal; the harness works without the adapter |
 | `emit.runner_model` | an existing harness's gate (runner) agents with a `model:` override other than `inherit` → carry it. Else empty |
 
 ---
 
-## Sweep 7 — an existing harness (when target `.claude/` exists)
+## Sweep 7 — an existing harness (when target `.agents/` or `.claude/` holds agents or skills)
 
 Fills `emit.runner_model`
 hints, extra `verify.mechanical_checks`, and the **lost-rules inventory** the
 confirm step needs. Read-only.
 
-1. **Inventory.** List every file under `.claude/` (agents, skills, hooks,
-   commands, `settings.json`, `settings.local.json`) and the memory file.
-2. **Settings.** Record `settings.json` and `settings.local.json` verbatim
+1. **Inventory.** List every file under `.agents/` and `.claude/` (agents,
+   skills, hooks, commands, `settings.json`, `settings.local.json`) and the
+   memory files (`AGENTS.md`, `CLAUDE.md`). A `.claude/agents` or
+   `.claude/skills` that is already a symlink into `.agents/` is one set of
+   files, not two.
+2. **Settings.** Record `.claude/settings.json` and `settings.local.json` verbatim
    (`enabledPlugins`, `permissions`, `hooks`, `env`, `model`). They are carried
    forward unchanged; the receipt hook, if opted in, is merged into them.
 3. **Runner model.** A `model:` other than `inherit` on the old gate /
@@ -449,7 +455,7 @@ confirm step needs. Read-only.
    no mechanical check is lost.
 7. **Lost-rules inventory.** Split every old agent and skill into its rules
    (one bullet, table row, checklist item or code-block trap each). For each
-   rule record where it lands in v2: an invariant skill, a rule pack, a filled
+   rule record where it lands in v3: an invariant skill, a rule pack, a filled
    slot (`IMPORT_TABLE`, `PORT_RULES`, `SHARED_PORTS_TABLE`, `STATE_RULES`,
    `TRAPS_WITH_EXAMPLES`, `PLATFORM_UI_RULES` …), a `layers[].rules` line, a
    mechanical check, or `carry_forward`. A rule with no home is **lost**: give
@@ -460,7 +466,7 @@ confirm step needs. Read-only.
 
 ## Output of detection
 
-A filled `harness.yml` (`harness_version: 2`), plus a short prose summary:
+A filled `harness.yml` (`harness_version: 3`), plus a short prose summary:
 
 - workspace map (if any), stack pack per package, kind and shape;
 - the role table, role by role, with local name and path;
@@ -472,5 +478,5 @@ A filled `harness.yml` (`harness_version: 2`), plus a short prose summary:
 - arch-test status and, for `generate`, the files to write;
 - every command that will be run later and whether it may fetch;
 - with an existing harness: settings carried, runner model, commit prefix, and
-  the lost-rules inventory (rule → v2 home, or "drop?");
+  the lost-rules inventory (rule → v3 home, or "drop?");
 - anything you could not determine.

@@ -7,7 +7,7 @@
 # …; layers below are written WITHOUT the prefix. Globs are repo-root relative.
 # A change crossing both packages is two chains sequenced by the contract:
 # api updates openapi.yaml and ships, then web regenerates its client.
-harness_version: 2
+harness_version: 3
 
 # Workspace top-level `project` carries name, kind and summary only; stack,
 # language and frameworks live per package.
@@ -27,9 +27,9 @@ plan:
 # live under packages[].skills.optional.
 
 emit:
-  cursor_compat: false
+  adapters: { claude: true, cursor: false }
   agent_suffix: ".md"
-  memory_file: "CLAUDE.md"
+  memory_file: "AGENTS.md"
   standing_authorization: true
   runner_model: ""
   hooks:

@@ -17,7 +17,7 @@ files they touched unless verify fails or the user asks.
 ## Phase folders
 
 ```text
-.claude/agents/
+.agents/agents/
 {{PHASE_FOLDER_TREE}}
 ```
 
@@ -163,7 +163,7 @@ orchestrator's own Agent tool calls, following this skill.
 <!-- harness: drop this section when workspace.enabled is false. -->
 ## Workspace — one chain per package
 
-Each package has its own hexagon, its own chain and its own `CLAUDE.md` with its
+Each package has its own hexagon, its own chain and its own `AGENTS.md` with its
 graph and touch-area table. Route a request by path using the table in
 `{{MEMORY_FILE}}`, then dispatch that package's agents (`<prefix>-<agent>`).
 

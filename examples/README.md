@@ -7,7 +7,7 @@ illustrative and say so in their header.
 
 | File | Stack | Kind | Shape | Conformance | What it demonstrates |
 |---|---|---|---|---|---|
-| `nextjs-apollo-web.harness.yml` | TypeScript — Next.js, Apollo, Zustand, Jest (yarn) | web-app | full | partial | Legacy services left as `migrate` gaps; a `domain-builder` split out of the repository layer; `.agent.md` suffix; memory file moved because root `CLAUDE.md` belongs to `next dev`. |
+| `nextjs-apollo-web.harness.yml` | TypeScript — Next.js, Apollo, Zustand, Jest (yarn) | web-app | full | partial | Legacy services left as `migrate` gaps; a `domain-builder` split out of the repository layer; `.agent.md` suffix; memory file moved because root `AGENTS.md` belongs to `next dev`. |
 | `react-router-web.harness.yml` | TypeScript — React Router, MobX, ArkType, neverthrow, Vitest (bun) | web-app | full | partial | A migration that has mostly landed: narrow, real residual gaps; `mechanical_checks` lifted from the repo's own gap audit; excludes that carve the state port out of `ports/`. |
 | `expo-mobile.harness.yml` | TypeScript — Expo / React Native, MobX, Vitest + jest-expo (bun) | mobile-app | full | partial | Two runners with per-layer `test_targeted`; `bunx expo install`; `component_design` on `react-native` with no preview; AGENTS.md versioned-docs rule carried forward. |
 | `rust-axum-service.harness.yml` | Rust — Axum, sqlx, cargo workspace | service | full | partial | Modular monolith (one crate per module); `cargo check --all-targets` so tests compile in the gate; builders own their `tests.rs` instead of a separate test author; in-memory adapters selected in fakes mode recorded as driven adapters, their reuse as test doubles a `migrate` gap. |

@@ -1,21 +1,17 @@
 ---
 name: harness-upgrade
-description: "Upgrade an installed coding harness to the current templates. Use when asked to 'upgrade the harness', 're-render .claude from harness.yml', 'pull the new harness version', or after the coding-harness plugin was updated. Migrates a v1 .claude/harness.yml to v2, re-renders every file, and preserves local hand-edits by asking per file — never overwrites silently."
+description: "Upgrade an installed coding harness to the current templates. Use when asked to 'upgrade the harness', 're-render the harness from harness.yml', 'pull the new harness version', or after this harness repo was updated. Migrates a v1 or v2 manifest to v3 (tool-neutral AGENTS.md + .agents/ layout), re-renders every file, and preserves local hand-edits by asking per file — never overwrites silently."
 ---
 
 # harness-upgrade
 
-You re-render an installed harness from its committed `.claude/harness.yml`
+You re-render an installed harness from its committed `.agents/harness.yml`
 against newer templates, without losing what the team changed by hand.
 
 ## Where the harness lives
 
-HARNESS_ROOT = `${CLAUDE_PLUGIN_ROOT}`
-
-If the value above still reads as a dollar-brace variable rather than an
-absolute path, you are standalone: HARNESS_ROOT is the repository two
-directories above this file, or — if this file was copied out of it — a
-coding-harness checkout the user points you at. Confirm
+HARNESS_ROOT is the repository two directories above this file, or — if this
+file was copied out of it — a coding-harness checkout the user points you at. Confirm
 `HARNESS_ROOT/harness.schema.yml` exists.
 
 Use `HARNESS_ROOT/skills/harness-init/SKILL.md` for the render rules,
@@ -34,8 +30,8 @@ what is different about upgrading.
 - **Read-only until confirmed.** Plan the whole upgrade, show it, then write.
 - Same security rules as `harness-init`: show and wait before any command that
   installs, restores or fetches.
-- **Settings survive.** `.claude/settings.json` and `.claude/settings.local.json`
-  are never re-rendered: every existing key (`enabledPlugins`, `permissions`,
+- **Settings survive.** Tool settings (`.claude/settings.json`,
+  `.claude/settings.local.json`) are never re-rendered: every existing key (`enabledPlugins`, `permissions`,
   `hooks`, `env`, `model`) is kept. The only change allowed is the receipt-hook
   merge. `settings.local.json` is never edited.
 - **No rule disappears silently.** Before writing, run the lost-rules check
@@ -47,20 +43,39 @@ what is different about upgrading.
 
 ### 1. Read the install
 
-- `.claude/harness.yml` missing → this harness was not installed by
+- `.agents/harness.yml` missing, `.claude/harness.yml` present → a v2 install: read it from there and run the layout migration in step 2. Both missing → this harness was not installed by
   `harness-init` or the manifest was not committed. Stop and offer
-  `harness-init`; it can read the existing `.claude/` as a strong hint.
+  `harness-init`; it can read the existing `.agents/` / `.claude/` as a strong hint.
 - Read `harness_version` (absent = 1), every rendered file, and
-  `git log --oneline -- .claude/ <memory_file>` to see which files were edited
+  `git log --oneline -- .agents/ <memory_file>` to see which files were edited
   after the install commit.
 
-### 2. Migrate the manifest (v1 → v2)
+### 2. Migrate the manifest (v1 → v2 → v3)
+
+**v2 → v3 (tool-neutral layout).** v2 rendered everything under `.claude/` and
+into `CLAUDE.md`. v3 renders once into `AGENTS.md` and `.agents/`; `.claude/`
+becomes an adapter of pointers. Plan, show and confirm all of it:
+
+| v2 | v3 |
+|---|---|
+| `.claude/harness.yml` | `.agents/harness.yml`, `harness_version: 3` |
+| `.claude/{skills,agents,hooks}/` real files | `git mv` into `.agents/…`; `.claude/skills` and `.claude/agents` become relative symlinks (`adapters.claude`) |
+| `emit.memory_file: CLAUDE.md` / `.claude/CLAUDE.md` | `AGENTS.md` / `.agents/AGENTS.md`; `CLAUDE.md` becomes one `@<memory file>` line. Rules in an old root `AGENTS.md` go through the lost-rules check (step 4b), not a second copy |
+| `<package>/CLAUDE.md` | `<package>/AGENTS.md`, plus a one-line `CLAUDE.md` import |
+| `emit.cursor_compat: b` | `emit.adapters: { claude: true, cursor: b }` |
+| `.claude/settings.json` hook command `…/.claude/hooks/receipt-check.sh` | same hook, command now `…/.agents/hooks/receipt-check.sh` (every other key kept) |
+| Cursor Startup reads naming `.claude/skills/<n>/SKILL.md` | `.agents/skills/<n>/SKILL.md` |
+
+Files under `.claude/agents` / `.claude/skills` the harness never rendered move
+too, after the user confirms the list: one source of truth means no second copy.
+
+**v1 → v2.**
 
 Apply mechanically, then list every inferred value for confirmation:
 
 | v1 | v2 |
 |---|---|
-| absent `harness_version` | `harness_version: 2` |
+| absent `harness_version` | `harness_version: 2`, then the v2 → v3 table above |
 | `project.kind: backend` | `service` (ask if it is a `worker`, `cli` or `library`) |
 | `project.kind: frontend` | `web-app` or `mobile-app` from frameworks (Expo / React Native → mobile) — ask |
 | absent `project.stack` | from `language` / lockfiles; must name a `stacks/` pack or `<other>` |
@@ -77,7 +92,7 @@ Apply mechanically, then list every inferred value for confirmation:
 | `testing.red_stub` one string, layers of different return shapes | the stack pack's §5 map form, only the shapes present; show which key each layer renders |
 | `emit.always_on_skills` present, or `@`-imports of skills in the installed memory file | remove the field and the imports; the memory file links skills instead. Tell the user |
 | absent `emit.runner_model` | the `model:` on the installed gate (or legacy test-runner) agents, if not `inherit` |
-| `emit.cursor_compat: true` with no `.cursor/rules/**` / `.cursor/agents/**` | propose `false`; ask |
+| `emit.adapters.cursor: true` with no `.cursor/rules/**` / `.cursor/agents/**` | propose `false`; ask |
 | `carry_forward` entries copied from a file the memory file `@`-imports | remove them; keep the import |
 | `verify.mechanical_checks` diff checks that grep the whole tree | rewrite over `$F` (changed files); add the stack pack's §14 checks the manifest lacks, run once against the exemplar |
 | no `kind: domain` layer | the user picks which layer is the domain, or adds one; it moves first in the chain with `owns_tests: true` |
@@ -86,7 +101,7 @@ Apply mechanically, then list every inferred value for confirmation:
 | absent `verify.arch_tests` | run harness-init DETECTION Sweep 5; propose `existing`, `generate` or `none` |
 | absent `emit.hooks.receipt_check` | `false` — offer it, opt-in, exactly as harness-init step 2.11 |
 | workspace with one root `implement-foundation`, prefixed `layer-reviewer` | re-render per harness-init "Workspace rendering": `<prefix>-implement-foundation` per package; shared agents unprefixed with every package's skills in `skills:`; delete the old files only after confirmation |
-| `plan.spec.sync_agent` / `plan.spec.commit_format` (the spec-sync step was removed: the harness reads the spec only and never writes, commits or pushes it) | drop both fields. List an installed `.claude/agents/verify/spec-sync*` or `prd-sync*` agent for deletion and delete it only after the user confirms. The workflow graph, `parallel.md` and the memory file (dispatch row, standing-authorization sentence) re-render without the spec-sync step |
+| `plan.spec.sync_agent` / `plan.spec.commit_format` (the spec-sync step was removed: the harness reads the spec only and never writes, commits or pushes it) | drop both fields. List an installed `.agents/agents/verify/spec-sync*` or `prd-sync*` agent for deletion and delete it only after the user confirms. The workflow graph, `parallel.md` and the memory file (dispatch row, standing-authorization sentence) re-render without the spec-sync step |
 | single package that is now a monorepo | offer workspace form; this is a re-detection, not a migration — run harness-init DETECTION Sweep 0–2 for the new packages |
 
 #### 2b. Re-validate against current detection rules — v2 manifests too
@@ -117,9 +132,9 @@ committed one and get confirmation before rendering anything.
 ### 3. Render to a staging area
 
 Render the full harness from the confirmed manifest into a scratch directory,
-not into `.claude/`. Also render the **base**: the old manifest against the
-templates of the installed version, if you can obtain them (the plugin's
-previous version, or `git show <tag>:templates/...` in a checkout). No base
+not into `.agents/`. Also render the **base**: the old manifest against the
+templates of the installed version, if you can obtain them (the previous
+version, or `git show <tag>:templates/...` in a checkout). No base
 available → treat the committed file itself as the base and say every
 difference will be shown as a possible hand-edit.
 
@@ -140,7 +155,7 @@ For each target file, with BASE (old render), LOCAL (committed), NEW (staged):
 For each conflict, show a short summary — not a full diff unless asked:
 
 ```text
-.claude/agents/implement/domain-builder.md
+.agents/agents/implement/domain-builder.md
   template:  + red-stub rule; max_files now from manifest
   local:     + rule "never import pkg/legacy"; tightened description
   proposal:  take NEW, move the local rule into layers[domain-builder].rules
@@ -158,11 +173,14 @@ commands now reach agents through `implement-foundation`. A local edit there is 
 drift: if it encodes a real repo fact, it goes into the manifest or
 `conformance`; if it softens a rule, it is dropped and the user is told why.
 
+**Adapters.** Compare them as pointers: a regular file or duplicated text where
+a symlink or `@` line belongs is replaced, after the lost-rules check.
+
 **Settings.** `settings.json` and `settings.local.json` are not part of the
 three-way compare: they are kept as LOCAL. If the hook is enabled, merge it into
-`settings.json` exactly as harness-init does (append / replace the receipt-check
+`settings.json` (adapter `claude`) exactly as harness-init does (append / replace the receipt-check
 group, never clobber; every other key kept). Update
-`.claude/hooks/receipt-check.sh` to the new template; it is invariant.
+`.agents/hooks/receipt-check.sh` to the new template; it is invariant.
 
 ### 4b. Lost-rules check (installed → re-rendered)
 
@@ -173,9 +191,9 @@ item, trap, grep line). For each rule find the NEW file that still carries it
 unmapped ones as a table:
 
 ```text
-LOST  .claude/agents/verify/layer-reviewer.md:118  rg 'reaction\(' src/shared/app
+LOST  .agents/agents/verify/layer-reviewer.md:118  rg 'reaction\(' src/shared/app
       proposal: add to verify.mechanical_checks (scope: repo)
-LOST  .claude/skills/component-design/SKILL.md:88  "Touch targets are at least 44x44"
+LOST  .agents/skills/component-design/SKILL.md:88  "Touch targets are at least 44x44"
       proposal: pack §15 rule → PLATFORM_UI_RULES (already rendered? no — enable platform: react-native)
 ```
 
@@ -186,7 +204,7 @@ upgrade does not write until every LOST line is resolved.
 
 ### 5. Write, verify, report
 
-1. Write the agreed files and the migrated `.claude/harness.yml`.
+1. Write the agreed files and the migrated `.agents/harness.yml`.
 2. Run harness-init's CHECKLIST, including "Settings preserved" and the "Lost
    rules" section with LOCAL as the old harness (show-and-wait for commands that
    run project code).

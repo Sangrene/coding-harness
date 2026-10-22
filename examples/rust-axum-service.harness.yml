@@ -9,7 +9,7 @@
 #     own tree (v2: the domain layer must own its tests).
 #   - `**/mod.rs` is no longer the wiring agent's: a mod.rs belongs to the layer
 #     whose tree it sits in. Wiring keeps lib.rs, the app crate and Cargo.toml.
-harness_version: 2
+harness_version: 3
 
 project:
   name: acme-api
@@ -280,9 +280,9 @@ skills:
     spec_implement: true
 
 emit:
-  cursor_compat: true
+  adapters: { claude: true, cursor: true }
   agent_suffix: ".md"
-  memory_file: ".claude/CLAUDE.md"
+  memory_file: ".agents/AGENTS.md"
   standing_authorization: true
   runner_model: ""
   hooks:

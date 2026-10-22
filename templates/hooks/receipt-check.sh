@@ -2,11 +2,12 @@
 # receipt-check.sh — SubagentStop hook for a coding-harness install.
 #
 # Rejects a harness agent's final message unless its last six lines are the six
-# receipt fields, one line each, in order (.claude/skills/orchestrator/receipt.md),
+# receipt fields, one line each, in order (.agents/skills/orchestrator/receipt.md),
 # and rejects a test-owning builder's `STATUS: done` unless OUTCOME contains the
 # whole words "red" and "green" (case-insensitive; "failed"/"passed" do not count).
 #
-# Usage (from .claude/settings.json, matcher limited to harness agents):
+# Usage (wired by a tool adapter, e.g. templates/adapters/claude/; matcher
+# limited to harness agents):
 #   receipt-check.sh [--tdd agent-a,agent-b]
 #
 # Input:  SubagentStop JSON on stdin (agent_type, last_assistant_message,
@@ -96,7 +97,7 @@ tail6=$(printf '%s\n' "$msg" | tr -d '\r' | awk '
     for (i = s; i <= n; i++) print line[i]
   }')
 
-receipt_rule="End your final message with exactly the six receipt lines, in order, nothing after them: STATUS: done | blocked | needs-orchestrator / SCOPE: <your agent name> / FILES: ... / OUTCOME: ... / BLOCKERS: ... / NEXT: ... Every field is ONE line: BLOCKERS must be one line; separate items with '; ' (same for FILES and OUTCOME). See .claude/skills/orchestrator/receipt.md."
+receipt_rule="End your final message with exactly the six receipt lines, in order, nothing after them: STATUS: done | blocked | needs-orchestrator / SCOPE: <your agent name> / FILES: ... / OUTCOME: ... / BLOCKERS: ... / NEXT: ... Every field is ONE line: BLOCKERS must be one line; separate items with '; ' (same for FILES and OUTCOME). See .agents/skills/orchestrator/receipt.md."
 
 # Trailing prose: a NEXT: line exists but is not the last line.
 last=$(printf '%s\n' "$tail6" | tail -n 1)

@@ -1,6 +1,6 @@
 # coding-harness
 
-A stack-agnostic coding harness for Claude Code. It provides an orchestrator
+A stack-agnostic coding harness for coding agents. It provides an orchestrator
 pattern, receipt-enforced TDD, hexagonal architecture, real separation of
 concerns and extract-til-you-drop. An agent generates it into any target
 repository and adapts it to that codebase.
@@ -20,26 +20,33 @@ The harness was generalized from five working harnesses:
 
 ## Install
 
-### As a plugin (recommended)
+Point an agent at `skills/harness-init/SKILL.md` in this repo. The skill
+resolves templates and stack packs relative to its own location. See
+`install/README.md`.
+
+The skills:
+
+| Skill | What it does |
+|---|---|
+| `harness-init` | Detect the repo, draft `.agents/harness.yml`, ask you to confirm, render `.agents/`, verify |
+| `harness-upgrade` | Re-render an installed harness against newer templates. Migrates v1 manifests and asks per hand-edited file |
+| `harness-doctor` | Read-only health check: drift, stale globs, unowned code, broken commands |
+
+## Layout it generates
+
+One source of truth: the harness is rendered once, tool-neutral.
 
 ```text
-/plugin marketplace add <path-or-git-url-of-this-repo>
-/plugin install coding-harness@coding-harness
+AGENTS.md                  memory file (or .agents/AGENTS.md); <package>/AGENTS.md in a workspace
+.agents/
+  harness.yml              the manifest
+  skills/  agents/  hooks/
 ```
 
-Then, in the target repository:
-
-| Command | What it does |
-|---|---|
-| `/coding-harness:harness-init` | Detect the repo, draft `.claude/harness.yml`, ask you to confirm, render `.claude/`, verify |
-| `/coding-harness:harness-upgrade` | Re-render an installed harness against newer templates. Migrates v1 manifests and asks per hand-edited file |
-| `/coding-harness:harness-doctor` | Read-only health check: drift, stale globs, unowned code, broken commands |
-
-### Standalone
-
-Point an agent at `skills/harness-init/SKILL.md` in this repo. When the plugin
-root variable is not substituted, the skill resolves templates relative to its
-own location. See `install/README.md`.
+Tool adapters point at those files and never copy them. With
+`emit.adapters.claude`: `CLAUDE.md` is one `@AGENTS.md` line, and
+`.claude/skills` and `.claude/agents` are symlinks into `.agents/`. Cursor reads
+`AGENTS.md` natively. See `templates/adapters/README.md`.
 
 ## The idea
 
@@ -110,7 +117,7 @@ package. Each package has its own stack, commands, layers and conformance.
 
 - Invariant skills are rendered once.
 - Filled skills and agents are rendered per package, with a prefix (`api-domain-builder`, `web-architecture`).
-- The root memory file routes by path. Each package directory gets its own `CLAUDE.md`.
+- The root memory file routes by path. Each package directory gets its own `AGENTS.md`.
 
 A change that crosses packages becomes two chains, sequenced by the shared
 contract.
@@ -128,8 +135,9 @@ TDD and boundaries are enforced structurally, not by exhortation:
    a reviewer.
 3. **Receipt-check hook (opt-in).** This is a `SubagentStop` hook
    (`templates/hooks/receipt-check.sh`). It bounces any malformed receipt back to
-   the subagent, including a `done` with no red run. Installing it edits
-   `.claude/settings.json`, so the installer shows the JSON and asks first.
+   the subagent, including a `done` with no red run. The script is tool-neutral
+   (`.agents/hooks/`); wiring it into a tool (the `claude` adapter edits
+   `.claude/settings.json`) shows the JSON and asks first.
 4. **`layer-reviewer`** catches what neither can: misplaced rules, decisions made
    from state, anemic domains, and fakes not typed as the port.
 
@@ -146,19 +154,19 @@ TDD and boundaries are enforced structurally, not by exhortation:
 ## Layout
 
 ```text
-.claude-plugin/            plugin.json + marketplace.json (repo is its own marketplace)
 skills/
   harness-init/            the installer: SKILL.md, DETECTION.md, CHECKLIST.md
-  harness-upgrade/         re-render + v1→v2 manifest migration
+  harness-upgrade/         re-render + v1/v2→v3 manifest migration
   harness-doctor/          read-only health check
 stacks/                    per-language packs: detection, commands, red stub, errors, arch tests
 templates/                 every emitted file, with {{PLACEHOLDERS}}
   PLACEHOLDERS.md          placeholder → manifest field (the renderer's authority)
-  hooks/                   receipt-check.sh + settings snippet
-harness.schema.yml         the manifest schema (v2), annotated
+  hooks/                   receipt-check.sh (tool-neutral)
+  adapters/                pointer-only tool adapters (claude, cursor); see adapters/README.md
+harness.schema.yml         the manifest schema (v3), annotated
 examples/                  real and illustrative manifests (see examples/README.md)
 ARCHITECTURE-ANALYSIS.md   what generalizes, what varies, and why
-install/README.md          pointer for standalone use
+install/README.md          pointer to the installer
 ```
 
 ## Design decisions worth knowing

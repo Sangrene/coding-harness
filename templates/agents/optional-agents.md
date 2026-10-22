@@ -48,7 +48,7 @@ Installer reference. Not emitted as a file.
 | `implement/test-author` | block below | some layer has `owns_tests: false` and the stack needs test bodies in a separate file |
 | `verify/<gate_name>` | `verify/gate.md.tmpl` (gate + targeted tests) | always |
 | `verify/layer-reviewer` | `verify/layer-reviewer.md.tmpl` | always |
-| `<package.path>/CLAUDE.md` | `PACKAGE-CLAUDE.md.tmpl` | once per package, `workspace.enabled: true` |
+| `<package.path>/AGENTS.md` | `PACKAGE-AGENTS.md.tmpl` | once per package, `workspace.enabled: true` |
 | `skills/<optional skill>/SKILL.md` | `skills/optional/<name>/SKILL.md.tmpl` | its flag is on — see "Skill names" in `PLACEHOLDERS.md` |
 
 **Shapes.** A role marked `absent: by-shape` produces no agent and no

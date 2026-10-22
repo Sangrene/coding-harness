@@ -1,6 +1,6 @@
 ---
 name: harness-doctor
-description: "Read-only health check of an installed coding harness. Use when asked to 'check the harness', 'is the harness still valid', 'harness doctor', or when agents start failing on stale paths or commands. Runs the acceptance checklist's mechanical and contract items, detects drift between .claude/harness.yml and the rendered .claude/ files, finds stale owns globs and commands that no longer run, and reports pass/fail. Changes nothing."
+description: "Read-only health check of an installed coding harness. Use when asked to 'check the harness', 'is the harness still valid', 'harness doctor', or when agents start failing on stale paths or commands. Runs the acceptance checklist's mechanical and contract items, detects drift between .agents/harness.yml and the rendered .agents/ files, finds stale owns globs and commands that no longer run, and reports pass/fail. Changes nothing."
 ---
 
 # harness-doctor
@@ -11,21 +11,18 @@ re-render. Your value is being read-only and exact.
 
 ## Where the harness lives
 
-HARNESS_ROOT = `${CLAUDE_PLUGIN_ROOT}`
-
-If the value above still reads as a dollar-brace variable rather than an
-absolute path, you are standalone: HARNESS_ROOT is the repository two
-directories above this file, or — if copied out of it — a coding-harness
-checkout the user points you at. Confirm `HARNESS_ROOT/harness.schema.yml`
+HARNESS_ROOT is the repository two directories above this file, or — if copied
+out of it — a coding-harness checkout the user points you at. Confirm `HARNESS_ROOT/harness.schema.yml`
 exists. The checklist is `HARNESS_ROOT/skills/harness-init/CHECKLIST.md`.
 
 ## Procedure
 
 ### 1. Load
 
-Read target `.claude/harness.yml`. Missing → report `FAIL: no manifest` and
-stop; offer `harness-init`. `harness_version` below 2 → report it and continue
-with the checks that do not depend on v2 fields; recommend `harness-upgrade`.
+Read target `.agents/harness.yml`. Missing, but `.claude/harness.yml` present (v2 layout) → report it as
+`harness_version` 2 and recommend `harness-upgrade`. Missing everywhere → report `FAIL: no manifest` and
+stop; offer `harness-init`. `harness_version` below 3 → report it and continue
+with the checks that do not depend on v3 fields; recommend `harness-upgrade`.
 
 ### 2. Checks that need no command execution
 
@@ -50,13 +47,14 @@ Run each; record pass / fail with the evidence (path, line, glob).
    - the targeted-test command in skills and agents equals
      `commands.test_targeted` (or the layer override);
    - the memory file's dispatch table covers exactly the manifest's layers;
-   - `emit.hooks.receipt_check` agrees with `.claude/settings.json` and the
-     presence of `.claude/hooks/receipt-check.sh`; the matcher regex lists
+   - `emit.hooks.receipt_check` agrees with the presence of
+     `.agents/hooks/receipt-check.sh` and, per enabled adapter, its wiring
+     (`claude`: `.claude/settings.json`); the matcher regex lists
      exactly the emitted agents; `--tdd` lists exactly the `owns_tests: true`
      agents. A stale regex silently stops checking a new agent.
    - workspace: every package has its prefixed layer and gate agents, its
      `<prefix>-architecture`, `-testing`, `-error-handling` and
-     `-implement-foundation` skills, and its `<path>/CLAUDE.md`; invariant
+     `-implement-foundation` skills, and its `<path>/AGENTS.md`; invariant
      skills and `orchestrator` exist once at the root; shared agents (scout,
      planner, architecture-gate, layer-reviewer) are unprefixed
      and their `skills:` list names every package's skills;
@@ -83,15 +81,19 @@ Run each; record pass / fail with the evidence (path, line, glob).
    - `carry_forward` holds no rule from a file the memory file `@`-imports;
      the memory files (root and per-package) contain no `@` import of a skill
      (`@...skills/...SKILL.md`) → fail: remove it, link instead;
-   - a leftover `.claude/agents/**/spec-sync*` or `prd-sync*` agent, a
+   - a leftover `.agents/agents/**/spec-sync*` or `prd-sync*` agent, a
      `plan.spec.sync_agent` / `commit_format` field, or a graph / dispatch row
      naming spec-sync → fail: the harness never writes the spec; run
      harness-upgrade to remove it (deletion needs the user's confirmation);
    - `plan.spec.enabled: true` while `plan.spec.path` is missing from the
      working tree (uninitialised submodule) → fail: `spec-mapper` has nothing
      to read;
-   - `emit.cursor_compat: true` without `.cursor/rules/**` / `.cursor/agents/**`
+   - `emit.adapters.cursor: true` without `.cursor/rules/**` / `.cursor/agents/**`
      → warn;
+   - adapters hold pointers only. `claude`: `CLAUDE.md` is one `@` line naming
+     the memory file; `.claude/skills` and `.claude/agents` are symlinks that
+     resolve into `.agents/`; no other harness content sits under `.claude/`.
+     A real directory or a duplicated rule → fail: one source of truth;
    - `.claude/settings.json` / `settings.local.json` parse (`jq .`). Lost
      keys cannot be detected without a pre-install copy; if `git log` shows
      the install commit changed them, report the removed keys
@@ -109,7 +111,7 @@ which may fetch dependencies. Wait for confirmation. Then run them read-only
 failure line. If the user declines, mark them `skipped`, not `pass`.
 
 The hook self-test from CHECKLIST (piping sample JSON into
-`.claude/hooks/receipt-check.sh`) only reads stdin and prints; run it without
+`.agents/hooks/receipt-check.sh`) only reads stdin and prints; run it without
 asking, if the hook is enabled.
 
 ### 4. Report

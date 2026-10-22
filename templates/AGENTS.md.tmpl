@@ -1,6 +1,6 @@
 <!-- harness: renders to emit.memory_file. `@` imports and links resolve
-     relative to this file, so {{SKILLS_IMPORT_PREFIX}} is `.claude/skills/`
-     for a root CLAUDE.md and `skills/` for .claude/CLAUDE.md. A section marked
+     relative to this file, so {{SKILLS_IMPORT_PREFIX}} is `.agents/skills/`
+     for a root AGENTS.md and `skills/` for .agents/AGENTS.md. A section marked
      "drop when" is removed whole, heading included. Strip every harness comment
      at render. -->
 # {{PROJECT_NAME}}
@@ -8,9 +8,9 @@
 {{PROJECT_SUMMARY}}
 
 <!-- harness: {{REPO_IMPORTS}} renders one `@<relative path>` line per repo
-     instruction file this memory file imports (e.g. `@AGENTS.md`, or
-     `@../AGENTS.md` from .claude/CLAUDE.md) — when the file exists and is
-     not itself the memory file. Empty otherwise; drop the blank line. -->
+     instruction file this memory file imports (only `@../AGENTS.md`,
+     from .agents/AGENTS.md) — when that root file exists and is not itself the
+     memory file. Empty otherwise; drop the blank line. -->
 {{REPO_IMPORTS}}
 
 This project is **hexagonal (ports & adapters) with clean layering**, and every
@@ -96,7 +96,7 @@ requests, which still need the user's confirmation.
      file caps and (with parallel.md, the dispatch authority) the workflow
      graph. Every other skill and agent references them here; none copies
      them. Workspace mode — drop "Workflow" and "Touch area → agent"; they
-     render per package from PACKAGE-CLAUDE.md.tmpl. -->
+     render per package from PACKAGE-AGENTS.md.tmpl. -->
 ### Workflow
 
 ```text

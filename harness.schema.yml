@@ -1,6 +1,6 @@
 # harness.yml — the single source of truth for a generated harness.
 # Written by harness-init after detection, confirmed by the user, then committed
-# to the target repo at .claude/harness.yml so harness-upgrade can re-render it.
+# to the target repo at .agents/harness.yml so harness-upgrade can re-render it.
 #
 # This file is the schema, annotated. See examples/ for filled instances.
 #
@@ -11,7 +11,7 @@
 #     `architecture`, `conformance`, `layers`, `verify`, `testing`. See the
 #     `workspace` section at the bottom.
 
-harness_version: 2
+harness_version: 3
 
 project:
   name: <repo name>
@@ -175,7 +175,7 @@ conformance:
 
 # THE CORE OF THE MANIFEST.
 # One entry per implement agent, in dependency order. Each becomes
-# .claude/agents/implement/<agent>.md rendered from
+# .agents/agents/implement/<agent>.md rendered from
 # templates/agents/implement/_layer-builder.md.tmpl, and one row of the
 # touch-area dispatch table in the memory file.
 #
@@ -324,18 +324,25 @@ skills:
     spec_implement: false               # manual "implement from the spec" skill
 
 emit:
-  cursor_compat: true | false   # dual background flags + explicit Startup reads
+  # Tool adapters (templates/adapters/). The harness itself is tool-neutral:
+  # AGENTS.md + .agents/. An adapter only points a tool at those files; it never
+  # copies their content.
+  adapters:
+    claude: true | false   # CLAUDE.md = `@AGENTS.md`; .claude/{skills,agents} symlinks; settings hook
+    cursor: true | false   # dual background flags + explicit skill reads in agent files
   agent_suffix: ".md" | ".agent.md"
-  # Where the root memory file goes. CLAUDE.md at repo root is standard;
-  # .claude/CLAUDE.md when the root file is owned by a framework generator.
-  memory_file: "CLAUDE.md" | ".claude/CLAUDE.md"
+  # Where the root memory file goes. AGENTS.md at repo root is standard;
+  # .agents/AGENTS.md when the root file is owned by a framework generator.
+  memory_file: "AGENTS.md" | ".agents/AGENTS.md"
   standing_authorization: true | false  # let the orchestrator spawn without asking
   # Model override for read-only runner agents (the gate agent). Empty = inherit.
   runner_model: <optional>
   hooks:
     # SubagentStop hook: rejects a harness agent's final message that is not a
     # valid receipt, or a test-owning builder's `done` receipt that does not
-    # report both a red and a green run. Opt-in — writes .claude/settings.json.
+    # report both a red and a green run. Opt-in. The script is always
+    # .agents/hooks/receipt-check.sh; each enabled adapter wires it into its
+    # tool (claude: merges .claude/settings.json). No adapter, no wiring.
     receipt_check: true | false
 
 # ── Workspace form ────────────────────────────────────────────────────────────
@@ -348,14 +355,15 @@ emit:
 # with independent services, a pnpm/cargo workspace with apps).
 #
 # Rendering:
-#   - invariant skills and orchestrator: once, in the root .claude/skills/;
+#   - invariant skills and orchestrator: once, in the root .agents/skills/;
 #   - filled skills and implement-foundation (it carries commands): one set per
 #     package, named <prefix>-architecture, <prefix>-implement-foundation etc.;
-#   - agents: all in the root .claude/agents/, named <prefix>-<agent>;
+#   - agents: all in the root .agents/agents/, named <prefix>-<agent>;
 #     plan agents and layer-reviewer are shared unless a package needs its own;
 #   - root memory file: workspace map + routing table (path → package);
-#   - <package.path>/CLAUDE.md: that package's commands, graph and dispatch
-#     table (loaded when an agent works under that path).
+#   - <package.path>/AGENTS.md: that package's commands, graph and dispatch
+#     table (loaded when an agent works under that path);
+#   - adapters (emit.adapters): per-package CLAUDE.md = `@AGENTS.md` and so on.
 # A change that crosses packages is two chains, sequenced by the contract
 # between them (the API schema, the shared types package), never one chain.
 workspace:

@@ -8,7 +8,7 @@ description: >
 ---
 
 <!-- harness: workspace mode — rendered once per package as
-     `.claude/skills/<prefix>-implement-foundation/SKILL.md`, with that
+     `.agents/skills/<prefix>-implement-foundation/SKILL.md`, with that
      package's values. Strip every harness comment at render. -->
 
 # Implement Foundation
@@ -28,7 +28,7 @@ and it is not relaxed for a small change or a deadline.
 
 `{{LAYER_ORDER}}`, unless the orchestrator specifies otherwise. The graph, with
 its conditions and parallel pairs, lives in
-`.claude/skills/orchestrator/parallel.md`; the touch-area table and file caps
+`.agents/skills/orchestrator/parallel.md`; the touch-area table and file caps
 live in `{{MEMORY_FILE}}`.
 
 Never implement a downstream layer before the layer it depends on, for the same
@@ -118,10 +118,10 @@ From `{{WORKDIR}}`:
 ## Output
 
 Final message MUST be a receipt per
-`.claude/skills/orchestrator/receipt.md` — nothing after it.
+`.agents/skills/orchestrator/receipt.md` — nothing after it.
 
 ## Parallelism
 
 Implement agents run in parallel only where
-`.claude/skills/orchestrator/parallel.md` explicitly allows it. You never dispatch
+`.agents/skills/orchestrator/parallel.md` explicitly allows it. You never dispatch
 another subagent yourself.

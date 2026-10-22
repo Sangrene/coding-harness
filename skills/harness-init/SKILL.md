@@ -1,6 +1,6 @@
 ---
 name: harness-init
-description: "Install the orchestrator / receipt-enforced TDD / hexagonal-architecture coding harness into a target repository, any stack, single package or monorepo. Use when asked to 'set up the harness', 'install the orchestrator pattern', 'add the agents and skills to this repo', 'generate .claude for this codebase', or to adapt this harness to a new project. Detects the codebase's real layers, commands and conventions (read-only), writes .claude/harness.yml for confirmation, then renders the agents, skills, memory files and optional arch tests and receipt hook."
+description: "Install the orchestrator / receipt-enforced TDD / hexagonal-architecture coding harness into a target repository, any stack, single package or monorepo. Use when asked to 'set up the harness', 'install the orchestrator pattern', 'add the agents and skills to this repo', 'generate .agents for this codebase', or to adapt this harness to a new project. Detects the codebase's real layers, commands and conventions (read-only), writes .agents/harness.yml for confirmation, then renders the agents, skills, memory files and optional arch tests and receipt hook."
 ---
 
 # harness-init
@@ -15,15 +15,10 @@ example. Your job is 80% detection and 20% rendering.
 
 ## Where the harness lives
 
-HARNESS_ROOT = `${CLAUDE_PLUGIN_ROOT}`
-
-If the value above still reads as a dollar-brace variable rather than an
-absolute path, you are running **standalone**, not as a plugin:
-
-- read directly from a checkout → HARNESS_ROOT is the repository containing this
-  file, two directories above it (`<root>/skills/harness-init/SKILL.md`);
-- copied out of the repo (e.g. `~/.claude/skills/harness-init/`) → there is no
-  root above it. Ask the user for the path to a coding-harness checkout.
+HARNESS_ROOT is the repository containing this file, two directories above it
+(`<root>/skills/harness-init/SKILL.md`). If this skill was copied out of the
+repo, there is no root above it: ask the user for the path to a coding-harness
+checkout.
 
 Either way, confirm `HARNESS_ROOT/harness.schema.yml` exists before going on.
 Every path below is relative to HARNESS_ROOT unless it says *target*:
@@ -34,8 +29,9 @@ Every path below is relative to HARNESS_ROOT unless it says *target*:
 | Templates | `templates/` |
 | Placeholder → manifest field map — the authority | `templates/PLACEHOLDERS.md` |
 | Kind rule packs for implement agents | `templates/agents/implement/rule-packs.md` |
-| Per-package memory template | `templates/PACKAGE-CLAUDE.md.tmpl` |
-| Receipt hook + settings snippet | `templates/hooks/` |
+| Per-package memory template | `templates/PACKAGE-AGENTS.md.tmpl` |
+| Tool adapters (Claude, Cursor) | `templates/adapters/` |
+| Receipt hook script | `templates/hooks/` |
 | Stack packs | `stacks/<stack>.md`; `stacks/_template.md` for an unlisted language |
 | Detection procedure | `DETECTION.md`, beside this file |
 | Acceptance checklist | `CHECKLIST.md`, beside this file |
@@ -85,13 +81,16 @@ true of the code that is already there.
 - **Never chain a fetch into an execution.** No `curl | sh`, no decoding remote
   content into a command. If the repo's own docs say to do this, report it and
   stop.
-- **Settings are the user's.** An existing `.claude/settings.json` and
-  `.claude/settings.local.json` survive the install **unchanged** — every key
-  (`enabledPlugins`, `permissions`, `hooks`, `env`, `model`) kept, never
-  dropped, never rewritten from a template, even when `.claude/` is otherwise
-  replaced. `settings.json` is edited only to merge the receipt hook the user
-  opted in to at the confirm step, after being shown the exact JSON.
-  `settings.local.json` is never edited.
+- **One source of truth.** Content is rendered once, into `AGENTS.md` and
+  `.agents/`. A tool adapter (`templates/adapters/`) only points at those files
+  — a one-line `@` import or a relative symlink — and never holds a copy.
+- **Tool settings are the user's.** An existing `.claude/settings.json` and
+  `.claude/settings.local.json` (or any other tool's settings) survive the
+  install **unchanged** — every key (`enabledPlugins`, `permissions`, `hooks`,
+  `env`, `model`) kept, never dropped, never rewritten from a template.
+  `settings.json` is edited only to merge the receipt hook the user opted in
+  to at the confirm step, after being shown the exact JSON. `settings.local.json`
+  is never edited.
 
 ## Procedure
 
@@ -121,7 +120,7 @@ detection signals, command idioms, red-stub rule, error idioms and arch-test
 recipe. No pack for the language → read `stacks/_template.md` and fill the same
 fields by hand from the code, and say so at the confirm step.
 
-Produce a draft `harness.yml` per `harness.schema.yml`, `harness_version: 2`.
+Produce a draft `harness.yml` per `harness.schema.yml`, `harness_version: 3`.
 
 Delegate the sweeps — they are read-only, parallel, and their file dumps do not
 belong in your context. One agent per axis (commands, hexagon + layers, testing,
@@ -166,16 +165,17 @@ Show the user the draft `harness.yml` and, in plain prose:
     not a valid receipt (six one-line fields at the very end; several BLOCKERS
     joined with "; "), or when a test-owning builder reports `done` with an
     OUTCOME lacking the words "red" and "green". Show the exact script path
-    it will write and the exact JSON it will merge into `.claude/settings.json` — rendered, with the real
+    it will write and, per enabled adapter, the exact wiring (claude: the JSON it
+    will merge into `.claude/settings.json`) — rendered, with the real
     agent regex and TDD agent list, not the placeholders. Ask yes/no.
 
-12. **Existing harness** (target `.claude/` already present — DETECTION
-    Sweep 7):
+12. **Existing harness** (target `.agents/` or `.claude/` already holds agents or
+    skills — DETECTION Sweep 7):
     - settings files kept as they are (name the keys, e.g. `enabledPlugins`),
       and the receipt-hook merge, if any, shown as a diff against them;
-    - **lost-rules check**: a table of every rule in the old harness → the v2
+    - **lost-rules check**: a table of every rule in the old harness → the v3
       file (and slot or manifest field) that now carries it. Every rule maps to
-      a v2 file or is listed as **dropped**, and nothing is dropped without the
+      a v3 file or is listed as **dropped**, and nothing is dropped without the
       user saying so; a softened invariant is listed as dropped with the reason.
       Then diff the old and the draft new file sets: every old agent / skill
       file is either re-rendered, absorbed (name where), or removed with
@@ -185,9 +185,11 @@ Show the user the draft `harness.yml` and, in plain prose:
     `view`, view-models `presentation`, transports `driving-adapter`; and, for
     parallel `state` ∥ `driven-adapter` layers, the state port owned by the
     state agent.
-14. **Memory-file context cost**: `@`-imports kept (e.g. `@AGENTS.md`, not
-    copied into `carry_forward`; never a skill), and `emit.cursor_compat` (default `false`; `true` only if the
-    user confirms they run the agents from Cursor).
+14. **Memory-file context cost**: `@`-imports kept (e.g. `@../AGENTS.md`, not
+    copied into `carry_forward`; never a skill), and the adapters:
+    `emit.adapters.claude` (default `true` when `CLAUDE.md` or `.claude/`
+    exists, else ask) and `emit.adapters.cursor` (default `false`; `true` only
+    if the user confirms they run the agents from Cursor).
 
 Ask about anything detection could not settle — in particular which pattern is
 the intended exemplar when two conflict, the disposition per gap, and the
@@ -208,39 +210,43 @@ when"). Agent files take the manifest's `emit.agent_suffix` (`.md` or
 minus `<sfx>`. Target layout, single package (paths in the *target* repo):
 
 ```text
-<emit.memory_file>                                    CLAUDE.md.tmpl
-.claude/harness.yml                                   the confirmed manifest
-.claude/skills/orchestrator/SKILL.md                  SKILL.md.tmpl
-.claude/skills/orchestrator/receipt.md                verbatim
-.claude/skills/orchestrator/parallel.md               parallel.md.tmpl
-.claude/skills/implement-foundation/SKILL.md          orchestrator/implement-foundation/SKILL.md.tmpl
+<emit.memory_file>                                    AGENTS.md.tmpl
+.agents/harness.yml                                   the confirmed manifest
+.agents/skills/orchestrator/SKILL.md                  SKILL.md.tmpl
+.agents/skills/orchestrator/receipt.md                verbatim
+.agents/skills/orchestrator/parallel.md               parallel.md.tmpl
+.agents/skills/implement-foundation/SKILL.md          orchestrator/implement-foundation/SKILL.md.tmpl
                                                       --- invariant ---
-.claude/skills/hexagonal-architecture/SKILL.md        verbatim
-.claude/skills/tdd/SKILL.md                           verbatim (no placeholders)
-.claude/skills/separation-of-concerns/SKILL.md        verbatim
-.claude/skills/extract-til-you-drop/SKILL.md          LOGIC_LAYERS, EXTRACT_LOCATION only
+.agents/skills/hexagonal-architecture/SKILL.md        verbatim
+.agents/skills/tdd/SKILL.md                           verbatim (no placeholders)
+.agents/skills/separation-of-concerns/SKILL.md        verbatim
+.agents/skills/extract-til-you-drop/SKILL.md          LOGIC_LAYERS, EXTRACT_LOCATION only
                                                       --- filled ---
-.claude/skills/architecture/SKILL.md
-.claude/skills/testing/SKILL.md
-.claude/skills/error-handling/SKILL.md
+.agents/skills/architecture/SKILL.md
+.agents/skills/testing/SKILL.md
+.agents/skills/error-handling/SKILL.md
                                                       --- optional (templates/skills/optional/<name>/) ---
-.claude/skills/i18n/SKILL.md                          skills.optional.i18n.enabled
-.claude/skills/component-design/SKILL.md              skills.optional.component_design.enabled
-.claude/skills/presentation-model/SKILL.md            skills.optional.presentation_model
-.claude/skills/modular-monolith/SKILL.md              skills.optional.modules
-.claude/skills/spec-implement/SKILL.md                skills.optional.spec_implement
-.claude/skills/test-naming/SKILL.md                   testing.naming: user-facing
+.agents/skills/i18n/SKILL.md                          skills.optional.i18n.enabled
+.agents/skills/component-design/SKILL.md              skills.optional.component_design.enabled
+.agents/skills/presentation-model/SKILL.md            skills.optional.presentation_model
+.agents/skills/modular-monolith/SKILL.md              skills.optional.modules
+.agents/skills/spec-implement/SKILL.md                skills.optional.spec_implement
+.agents/skills/test-naming/SKILL.md                   testing.naming: user-facing
                                                       --- agents ---
-.claude/agents/plan/<scout><sfx>                      scout.md.tmpl
-.claude/agents/plan/<planner, architecture-gate><sfx> only when plan.depth: full
-.claude/agents/implement/<agent><sfx>                 _layer-builder.md.tmpl + rule pack for its kind (every layer not kind: wiring)
-.claude/agents/implement/<wiring agent><sfx>          wiring-agent.md.tmpl (the kind: wiring layer; never for shape: library)
-.claude/agents/verify/<gate_name><sfx>                gate.md.tmpl (gate + targeted tests)
-.claude/agents/verify/layer-reviewer<sfx>
-.claude/agents/<optional><sfx>                        per the emit table in templates/agents/optional-agents.md
+.agents/agents/plan/<scout><sfx>                      scout.md.tmpl
+.agents/agents/plan/<planner, architecture-gate><sfx> only when plan.depth: full
+.agents/agents/implement/<agent><sfx>                 _layer-builder.md.tmpl + rule pack for its kind (every layer not kind: wiring)
+.agents/agents/implement/<wiring agent><sfx>          wiring-agent.md.tmpl (the kind: wiring layer; never for shape: library)
+.agents/agents/verify/<gate_name><sfx>                gate.md.tmpl (gate + targeted tests)
+.agents/agents/verify/layer-reviewer<sfx>
+.agents/agents/<optional><sfx>                        per the emit table in templates/agents/optional-agents.md
 <verify.arch_tests.path>                              when arch_tests.status: generate
-.claude/hooks/receipt-check.sh                        when emit.hooks.receipt_check
-.claude/settings.json                                 kept as found; receipt hook merged in when emit.hooks.receipt_check
+.agents/hooks/receipt-check.sh                        when emit.hooks.receipt_check
+                                                      --- adapters (pointers only) ---
+CLAUDE.md                                             adapters/claude/CLAUDE.md.tmpl — `@<memory_file>`; adapters.claude
+.claude/skills                                        symlink → ../.agents/skills; adapters.claude
+.claude/agents                                        symlink → ../.agents/agents; adapters.claude
+.claude/settings.json                                 kept as found; receipt hook merged in when adapters.claude and emit.hooks.receipt_check
 .claude/settings.local.json                           kept as found, never edited
 ```
 
@@ -264,7 +270,7 @@ Per-layer values the layer-builder template needs:
   over `$F` (the changed-file list the reviewer computes first), never over
   the whole source tree; `scope: repo` checks render as repo-wide.
 
-`implement-foundation` goes at `.claude/skills/implement-foundation/`, not
+`implement-foundation` goes at `.agents/skills/implement-foundation/`, not
 nested under `orchestrator/`: agents preload it by name, and only top-level
 skill directories are discovered. If `templates/` gains or renames a file,
 `PLACEHOLDERS.md` is the list; this table is the expected shape.
@@ -275,13 +281,13 @@ Per the schema's `workspace` section:
 
 - **Once, at the root:** invariant skills (`hexagonal-architecture`, `tdd`,
   `separation-of-concerns`, `extract-til-you-drop`), `orchestrator` (with
-  `receipt.md` and `parallel.md`), `.claude/harness.yml`, the hook.
+  `receipt.md` and `parallel.md`), `.agents/harness.yml`, the hook, the adapter files.
 - **Per package, prefixed:** filled skills and the foundation skill as
-  `.claude/skills/<prefix>-architecture/`, `<prefix>-testing/`,
+  `.agents/skills/<prefix>-architecture/`, `<prefix>-testing/`,
   `<prefix>-error-handling/`, `<prefix>-implement-foundation/` (it carries the
   package's commands), plus that package's enabled optional skills as
   `<prefix>-<name>/`; layer agents (builders and the wiring agent) as
-  `.claude/agents/implement/<prefix>-<agent><sfx>` with
+  `.agents/agents/implement/<prefix>-<agent><sfx>` with
   `name: <prefix>-<agent>`; the gate as `<prefix>-<gate_name>`. Every
   cross-reference inside a package's files — `skills:` lists, `NEXT:`,
   forbidden-owner names, dispatch rows — uses the prefixed names.
@@ -293,8 +299,9 @@ Per the schema's `workspace` section:
   paths it is working on.
 - **Root memory file:** workspace map, routing table (path glob → package →
   its chain), contracts and owners, and the cross-package rule.
-- **`<package.path>/CLAUDE.md`** from `PACKAGE-CLAUDE.md.tmpl`: that package's
-  commands, graph and dispatch table. If the package already has a `CLAUDE.md`,
+- **`<package.path>/AGENTS.md`** from `PACKAGE-AGENTS.md.tmpl`: that package's
+  commands, graph and dispatch table (with `adapters.claude`, plus a one-line
+  `<package.path>/CLAUDE.md` = `@AGENTS.md`). If the package already has an `AGENTS.md`,
   do not overwrite it — show the diff and ask, or append a delimited harness
   section.
 - **Ownership globs are rendered from the repo root** (`services/api/internal/**`),
@@ -356,11 +363,25 @@ Follow the stack pack's "Arch tests" recipe. Treat them as tests, so TDD-style:
    layer's `owns` (normally the composition root / wiring layer, or a dedicated
    architecture path excluded from every builder).
 
+#### Adapters (pointers only)
+
+Per `templates/adapters/README.md`. Never render rule, skill or agent text here.
+
+- **claude:** write `CLAUDE.md` from `adapters/claude/CLAUDE.md.tmpl` (root, and
+  per package in workspace mode). Create `.claude/skills` and `.claude/agents`
+  as relative symlinks to `../.agents/skills` and `../.agents/agents`. If either
+  already exists as a real directory, see "Existing harness" below; never
+  replace it blind. An existing `CLAUDE.md` with its own rules goes through the
+  lost-rules check first; it then becomes the one-line import.
+- **cursor:** no extra files; `CURSOR_FLAGS` / `CURSOR_STARTUP` render inside
+  each agent file.
+
 #### Receipt hook (when `emit.hooks.receipt_check: true`)
 
 1. Copy `templates/hooks/receipt-check.sh` to target
-   `.claude/hooks/receipt-check.sh`, unchanged, and make it executable.
-2. Render `templates/hooks/settings.snippet.json`:
+   `.agents/hooks/receipt-check.sh`, unchanged, and make it executable.
+2. Wire it per enabled adapter. For `claude`, render
+   `templates/adapters/claude/settings.snippet.json`:
    - `{{HARNESS_AGENTS_REGEX}}` → `^(<every emitted agent name, |-joined>)$` —
      plan, implement and verify agents, prefixed layer and gate agents in
      workspace mode, shared agents unprefixed. Names are the frontmatter `name`
@@ -373,20 +394,25 @@ Follow the stack pack's "Arch tests" recipe. Treat them as tests, so TDD-style:
    - absent → write the rendered snippet;
    - present → parse it, keep every existing key, append the rendered matcher
      group to `hooks.SubagentStop` (create the arrays if missing). If a group
-     already runs `.claude/hooks/receipt-check.sh`, replace that group only.
+     already runs `.agents/hooks/receipt-check.sh`, replace that group only.
    - Write it back, then parse it again (`jq . .claude/settings.json` or
      `python3 -m json.tool`) to prove it is valid JSON.
 4. The JSON written must be the JSON shown at confirm. If it differs, show the
    new version and ask again.
 
-#### Existing `.claude/` (re-install over a hand-made or older harness)
+#### Existing harness (re-install over a hand-made or older harness)
 
-1. Before writing, copy the old `.claude/` and memory file to a scratch
-   directory — the lost-rules check (confirm item 12) and CHECKLIST compare
-   against it.
+1. Before writing, copy the old `.agents/` and `.claude/` directories and the
+   old memory files (`CLAUDE.md`, `AGENTS.md`) to a scratch directory — the
+   lost-rules check (confirm item 12) and CHECKLIST compare against it.
 2. Write the new files. Keep `settings.json` and `settings.local.json` byte-for-
    byte, except the confirmed receipt-hook merge into `settings.json`.
-3. Files from the old harness that the confirmed plan marks *absorbed* or
+3. **Old `.claude/agents` / `.claude/skills` real directories** (the v2 layout,
+   or hand-made): their files move into `.agents/agents` / `.agents/skills`
+   (`git mv`), then the directory is replaced by the symlink. Files the harness
+   does not own move too, after the user confirms the list: one source of truth
+   means no second copy.
+4. Files from the old harness that the confirmed plan marks *absorbed* or
    *removed* are deleted only now, and only those. Anything else not
    re-rendered is project-local: keep it.
 
@@ -402,7 +428,7 @@ Offer a dry run: the user names a small real feature; walk the graph for it —
 scout, one implement layer, gate — posting dispatch lines and receipts. Nothing
 proves a harness like one green receipt from it.
 
-Then tell the user to commit `.claude/harness.yml` with the rest: it is what
+Then tell the user to commit `.agents/harness.yml` with the rest: it is what
 `harness-upgrade` re-renders from and what `harness-doctor` checks against.
 
 ## What not to do

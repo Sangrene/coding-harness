@@ -4,7 +4,7 @@
 # carving the composition-root files out of every layer, max_files raised
 # where C# forces several files per unit of work, and a `partial` gap typical
 # of the template: the repository interface living next to EF Core.
-harness_version: 2
+harness_version: 3
 
 project:
   name: acme-api
@@ -269,9 +269,9 @@ skills:
     spec_implement: false
 
 emit:
-  cursor_compat: false
+  adapters: { claude: true, cursor: false }
   agent_suffix: ".md"
-  memory_file: "CLAUDE.md"
+  memory_file: "AGENTS.md"
   standing_authorization: false
   runner_model: ""
   hooks:
