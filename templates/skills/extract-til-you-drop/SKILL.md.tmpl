@@ -43,8 +43,8 @@ Signals to extract, in descending strength:
 
 1. Write the logic the direct way first — get it correct.
 2. Read the body and mark every seam from the list above.
-3. Extract each seam into a private function named for its **intent**, not its
-   mechanism.
+3. Extract each seam into a private function named for **what it does** (see
+   Naming), not its mechanism or its caller's use.
 4. Re-read the parent. It should now read as a sentence-level summary of the
    operation, with no implementation detail left.
 5. Repeat on each extracted function. Extraction usually cascades one level.
@@ -52,16 +52,28 @@ Signals to extract, in descending strength:
 
 ## Naming
 
-Name the extracted function for what the caller wants, not how it is done.
+Name every function for **what it does**: its operation and the data or result
+it handles. Do not name it after how a caller uses it, a surrounding workflow,
+or an anticipated purpose, unless the function actually performs that behavior.
+Apply the same distinction to returned data types.
 
-| Mechanism (bad) | Intent (good) |
+Use verb phrases that describe the operation.
+
+| Mechanism or caller's use (bad) | Operation (good) |
 |---|---|
 | loop over items and check | has expired item |
 | do validation step 2 | reject duplicate email |
 | map DTO to entity internal | to domain |
+| `list_maintenance_targets` → `ProjectMaintenanceTarget` (paginated read of stored project/owner ID pairs, named for the caller's use) | `list_project_owner_pairs` → `ProjectOwnerPair` |
 | handle stuff | anything — this name is always a defect |
 
-Spell the intent in the language's own casing (`hasExpiredItem`,
+A function that really repairs ledger state may be named `repair_project_ledger`:
+the name is right because the function performs that behavior.
+
+Before accepting a name, ask: would it still describe the same operation if
+another caller reused it? If not, rename it before completing the change.
+
+Spell the name in the language's own casing (`hasExpiredItem`,
 `has_expired_item`, `HasExpiredItem`); the rule is about the words, not the
 case.
 
@@ -125,6 +137,9 @@ Before finishing any logic change:
       deleted as redundant.
 - [ ] No function body has an unexplained blank-line block.
 - [ ] Every boolean condition with 2+ clauses is a named predicate.
+- [ ] Every function and returned type is named for what it does, as a verb
+      phrase describing the operation — not for its caller, workflow, or
+      anticipated purpose. It would still be accurate if another caller reused it.
 - [ ] The top-level function reads as a summary a non-author could follow.
 - [ ] Every seam that was a business rule moved to the domain, with its test.
 - [ ] No helper crosses a layer boundary.
